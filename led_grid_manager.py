@@ -1,8 +1,8 @@
 import tkinter as tk
-from tkinter import ttk, messagebox, filedialog
+from tkinter import ttk, colorchooser, messagebox, filedialog
 import json
 import os
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 from dataclasses import dataclass, asdict, field
 import math
 
@@ -17,6 +17,8 @@ class LEDGrouping:
     col_modules: int = 1  # Number of 8x8 modules horizontally
     round_leds: bool = False  # True for round, False for square
     ref_char: str = ""  # Reference character for bytecode (auto-generated from name)
+    led_color: str = "#f00"
+    use_custom_color: bool = False
     leds: List[List[int]] = field(default_factory=lambda: [[0 for _ in range(8)] for _ in range(8)])
     
     @property
@@ -65,6 +67,39 @@ class LEDGridManager:
         self.led_gap = 2    # Gap between LEDs
         self.module_gap = 4  # Gap between 8x8 modules (1/4 of led_size)
         
+        # Icon storage
+        self.icons: Dict[str, Optional[tk.PhotoImage]] = {}
+        # Theme colors using Material Design 3 tokens
+        self.theme = "light"
+        self.default_led_color = "#f00"
+        self.colors = {
+            "light": {
+                "surface": "#FFFBFE",
+                "surface_variant": "#E7E0EC",
+                "background": "#FFFBFE",
+                "primary": "#6750A4",
+                "on_primary": "#FFFFFF",
+                "on_surface": "#1C1B1F",
+                "on_surface_variant": "#49454F",
+                "outline": "#79747E",
+                "outline_variant": "#CFC7D1",
+                "secondary": "#625B71",
+                "surface_tint": "#6750A4"
+            },
+            "dark": {
+                "surface": "#1C1B1F",
+                "surface_variant": "#49454F",
+                "background": "#1C1B1F",
+                "primary": "#D0BCFF",
+                "on_primary": "#381E72",
+                "on_surface": "#E6E1E5",
+                "on_surface_variant": "#E6E1E5",
+                "outline": "#938F99",
+                "outline_variant": "#625B71",
+                "secondary": "#CCC2DC",
+                "surface_tint": "#CCC2DC"
+            }
+        }
         # Create UI
         self.create_widgets()
         self.load_project()
@@ -74,13 +109,22 @@ class LEDGridManager:
         # Top control panel
         control_frame = ttk.Frame(self.root)
         control_frame.pack(side=tk.TOP, fill=tk.X, padx=5, pady=5)
-        
-        ttk.Button(control_frame, text="Add Grouping", command=self.add_grouping).pack(side=tk.LEFT, padx=2)
-        ttk.Button(control_frame, text="Export Code", command=self.export_code).pack(side=tk.LEFT, padx=2)
-        ttk.Button(control_frame, text="Save Project", command=self.save_project).pack(side=tk.LEFT, padx=2)
-        ttk.Button(control_frame, text="Load Project", command=self.load_project_dialog).pack(side=tk.LEFT, padx=2)
-        ttk.Button(control_frame, text="Clear All", command=self.clear_all).pack(side=tk.LEFT, padx=2)
-        
+
+        left_frame = ttk.Frame(control_frame)
+        left_frame.pack(side=tk.LEFT)
+        right_frame = ttk.Frame(control_frame)
+        right_frame.pack(side=tk.RIGHT)
+
+        # Load icons
+        self.load_icons()
+
+        # Toolbar buttons (left side)
+        ttk.Button(left_frame, image=self.icons.get('new'), text=" New", compound=tk.LEFT, command=self.add_grouping).pack(side=tk.LEFT, padx=2)
+        ttk.Button(left_frame, image=self.icons.get('save'), text=" Save", compound=tk.LEFT, command=self.save_project).pack(side=tk.LEFT, padx=2)
+        ttk.Button(left_frame, image=self.icons.get('load'), text=" Load", compound=tk.LEFT, command=self.load_project_dialog).pack(side=tk.LEFT, padx=2)
+        ttk.Button(left_frame, image=self.icons.get('publish'), text=" Publish", compound=tk.LEFT, command=self.export_code).pack(side=tk.LEFT, padx=2)
+        ttk.Button(left_frame, image=self.icons.get('clear'), text=" Clear All", compound=tk.LEFT, command=self.clear_all).pack(side=tk.LEFT, padx=2)
+
         # Canvas for LED display
         self.canvas = tk.Canvas(self.root, bg="white", cursor="hand2")
         self.canvas.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
@@ -91,13 +135,20 @@ class LEDGridManager:
         self.canvas.bind("<Motion>", self.on_canvas_motion)
         self.canvas.bind("<Button-3>", self.on_canvas_right_click)
         
-        # Create context menu
+        # Create context menu (icons will be added if available)
         self.context_menu = tk.Menu(self.root, tearoff=0)
-        self.context_menu.add_command(label="Edit Properties", command=self.show_properties_dialog)
-        self.context_menu.add_command(label="Duplicate", command=self.duplicate_grouping)
+        self.context_menu.add_command(label="Edit Properties", command=self.show_properties_dialog, image=self.icons.get('edit'), compound=tk.LEFT)
+        self.context_menu.add_command(label="Duplicate", command=self.duplicate_grouping, image=self.icons.get('duplicate'), compound=tk.LEFT)
         self.context_menu.add_separator()
-        self.context_menu.add_command(label="Delete", command=self.remove_grouping)
-        self.context_menu.add_command(label="Toggle LED Shape", command=self.toggle_led_shape_quick)
+        self.context_menu.add_command(label="Delete", command=self.remove_grouping, image=self.icons.get('delete'), compound=tk.LEFT)
+        self.context_menu.add_command(label="Toggle LED Shape", command=self.toggle_led_shape_quick, image=self.icons.get('shape'), compound=tk.LEFT)
+
+        # LED color default button + theme toggle on right side
+        self.default_color_btn = ttk.Button(right_frame, text="LED Color", command=self.pick_default_led_color)
+        self.default_color_btn.pack(side=tk.RIGHT, padx=2)
+        self.theme_btn = ttk.Button(right_frame, image=self.icons.get('light'), command=self.toggle_theme)
+        self.theme_btn.pack(side=tk.RIGHT, padx=2)
+        self.apply_theme()
         
     def add_grouping(self):
         """Add a new LED grouping"""
@@ -182,7 +233,117 @@ class LEDGridManager:
         if clicked_grouping:
             self.selected_grouping = clicked_grouping
             self.context_menu.post(event.x_root, event.y_root)
-            
+
+    def load_icons(self):
+        """Load icons from icons/ directory if present."""
+        icon_names = {
+            'new': ['add.png'],
+            'save': ['save.png'],
+            'load': ['load.png'],
+            'publish': ['export.png'],
+            'clear': ['deleteall.png', 'remove.png'],
+            'edit': ['properties.png'],
+            'duplicate': ['duplicate.png'],
+            'delete': ['deletesingle.png', 'remove.png'],
+            'remove': ['remove.png'],
+            'shape': [],
+            'light': ['lightmode.png'],
+            'dark': ['darkmode.png']
+        }
+
+        icons_dir = os.path.join(os.path.dirname(__file__), 'icons')
+        for key, candidates in icon_names.items():
+            self.icons[key] = None
+            for name in candidates:
+                path = os.path.join(icons_dir, name)
+                if os.path.exists(path):
+                    image = self.load_icon_file(path, max_size=18)
+                    if image:
+                        self.icons[key] = image
+                        break
+
+    def load_icon_file(self, path: str, max_size: int = 18) -> Optional[tk.PhotoImage]:
+        try:
+            img = tk.PhotoImage(file=path)
+            width = img.width()
+            height = img.height()
+            if max(width, height) > max_size:
+                factor = max(1, round(max(width, height) / max_size))
+                img = img.subsample(factor, factor)
+            return img
+        except Exception:
+            return None
+
+    def apply_theme(self):
+        """Apply current theme colors to widgets using Material Design 3 tokens."""
+        cols = self.colors.get(self.theme, self.colors['light'])
+        surface = cols['surface']
+        surface_variant = cols['surface_variant']
+        primary = cols['primary']
+        on_primary = cols['on_primary']
+        on_surface = cols['on_surface']
+        on_surface_variant = cols.get('on_surface_variant', on_surface)
+        outline = cols['outline']
+        outline_variant = cols.get('outline_variant', surface_variant)
+        background = cols.get('background', surface)
+
+        # Window and canvas
+        try:
+            self.root.configure(bg=background)
+            self.canvas.configure(bg=surface)
+        except Exception:
+            pass
+
+        style = ttk.Style()
+        try:
+            style.theme_use('default')
+        except Exception:
+            pass
+
+        style.configure('TFrame', background=background)
+        style.configure('TLabel', background=background, foreground=on_surface, font=("Segoe UI", 10))
+        style.configure('TEntry', fieldbackground=surface, foreground=on_surface)
+        style.configure('TButton', background=surface_variant, foreground=on_surface, relief='flat', borderwidth=0, font=("Segoe UI", 10), padding=8)
+        style.map(
+            'TButton',
+            background=[('active', primary), ('disabled', surface_variant)],
+            foreground=[('active', on_primary)]
+        )
+
+        try:
+            self.context_menu.configure(
+                background=surface_variant,
+                foreground=on_surface,
+                activebackground=primary,
+                activeforeground=on_primary
+            )
+        except Exception:
+            pass
+
+        if self.theme == 'light':
+            if self.icons.get('light'):
+                self.theme_btn.config(image=self.icons.get('light'), text='')
+            else:
+                self.theme_btn.config(image='', text='Light')
+        else:
+            if self.icons.get('dark'):
+                self.theme_btn.config(image=self.icons.get('dark'), text='')
+            else:
+                self.theme_btn.config(image='', text='Dark')
+
+    def toggle_theme(self):
+        """Toggle between light and dark themes"""
+        self.theme = 'dark' if self.theme == 'light' else 'light'
+        self.apply_theme()
+
+    def pick_default_led_color(self):
+        """Open a color picker to choose the default LED color."""
+        color = colorchooser.askcolor(color=self.default_led_color, title="Pick default LED color")
+        if color and color[1]:
+            self.default_led_color = color[1]
+            self.refresh_display()
+            self.apply_theme()
+
     def find_grouping_at(self, x: int, y: int) -> LEDGrouping:
         """Find which grouping is at the given coordinates"""
         for grouping in self.groupings:
@@ -298,7 +459,23 @@ class LEDGridManager:
         # Round LEDs
         round_var = tk.BooleanVar(value=self.selected_grouping.round_leds)
         ttk.Checkbutton(dialog, text="Round LEDs", variable=round_var).grid(row=4, column=0, columnspan=2, sticky=tk.W, padx=10, pady=5)
-        
+
+        # Custom LED color per grouping
+        use_custom_color_var = tk.BooleanVar(value=self.selected_grouping.use_custom_color)
+        ttk.Checkbutton(dialog, text="Use custom color for this grouping", variable=use_custom_color_var).grid(row=5, column=0, columnspan=2, sticky=tk.W, padx=10, pady=5)
+
+        ttk.Label(dialog, text="Custom Color:").grid(row=6, column=0, sticky=tk.W, padx=10, pady=5)
+        custom_color_var = tk.StringVar(value=self.selected_grouping.led_color or self.default_led_color)
+        color_entry = ttk.Entry(dialog, textvariable=custom_color_var, width=10)
+        color_entry.grid(row=6, column=1, sticky=tk.W, padx=10, pady=5)
+
+        def pick_group_color():
+            color = colorchooser.askcolor(color=custom_color_var.get() or self.default_led_color, title="Pick grouping color")
+            if color and color[1]:
+                custom_color_var.set(color[1])
+
+        ttk.Button(dialog, text="Pick Color", command=pick_group_color).grid(row=7, column=0, columnspan=2, sticky=tk.W, padx=10, pady=5)
+
         # Buttons
         def apply_changes():
             new_name = name_var.get().strip()
@@ -320,13 +497,24 @@ class LEDGridManager:
                 return
             
             self.selected_grouping.round_leds = round_var.get()
+            self.selected_grouping.use_custom_color = use_custom_color_var.get()
+            self.selected_grouping.led_color = custom_color_var.get().strip() or self.default_led_color
             self.refresh_display()
             dialog.destroy()
-        
+
+        def delete_grouping():
+            if messagebox.askyesno("Delete Grouping", "Delete this grouping?"):
+                if self.selected_grouping in self.groupings:
+                    self.groupings.remove(self.selected_grouping)
+                self.selected_grouping = None
+                self.refresh_display()
+                dialog.destroy()
+
         button_frame = ttk.Frame(dialog)
-        button_frame.grid(row=5, column=0, columnspan=2, padx=10, pady=15)
+        button_frame.grid(row=8, column=0, columnspan=2, padx=10, pady=15)
         ttk.Button(button_frame, text="Apply", command=apply_changes).pack(side=tk.LEFT, padx=5)
         ttk.Button(button_frame, text="Cancel", command=dialog.destroy).pack(side=tk.LEFT, padx=5)
+        ttk.Button(button_frame, image=self.icons.get('remove'), text=" Remove", compound=tk.LEFT, command=delete_grouping).pack(side=tk.LEFT, padx=5)
     
     def duplicate_grouping(self):
         """Duplicate the selected grouping"""
@@ -403,17 +591,22 @@ class LEDGridManager:
         width = cols_pixels + 10
         height = rows_pixels + 35
         
-        bg_color = "#e0e0e0" if selected else "#f0f0f0"
-        border_color = "#0066cc" if selected else "#cccccc"
+        cols = self.colors.get(self.theme, self.colors['light'])
+        bg_color = cols['surface_variant'] if selected else cols['surface']
+        border_color = cols['primary'] if selected else cols['outline']
+        title_color = cols['on_surface']
+        led_on_color = grouping.led_color if grouping.use_custom_color else self.default_led_color
+        led_off_color = '#000000'
+        led_outline = cols['outline']
         border_width = 3 if selected else 1
-        
-        self.canvas.create_rectangle(x, y, x + width, y + height, 
+
+        self.canvas.create_rectangle(x, y, x + width, y + height,
                                     fill=bg_color, outline=border_color, width=border_width)
-        
+
         # Draw title
         title_y = y + 5
-        self.canvas.create_text(x + 5, title_y, anchor=tk.NW, text=grouping.name, 
-                               font=("Arial", 10, "bold"), fill="black")
+        self.canvas.create_text(x + 8, title_y, anchor=tk.NW, text=grouping.name,
+                               font=("Segoe UI", 10, "bold"), fill=title_color)
         
         # Draw LEDs with module gaps
         led_start_x = x + 5
@@ -432,18 +625,18 @@ class LEDGridManager:
                 led_y = led_start_y + row_in_module * (self.led_size + self.led_gap) + module_row * (8 * (self.led_size + self.led_gap) + self.module_gap)
                 
                 is_on = grouping.leds[row][col]
-                color = "#ff0000" if is_on else "#cccccc"
+                color = led_on_color if is_on else led_off_color
                 
                 if grouping.round_leds:
                     # Draw round LED
                     self.canvas.create_oval(led_x, led_y, 
                                            led_x + self.led_size, led_y + self.led_size,
-                                           fill=color, outline="#333333", width=1)
+                                           fill=color, outline=led_outline, width=1)
                 else:
                     # Draw square LED
                     self.canvas.create_rectangle(led_x, led_y, 
                                                 led_x + self.led_size, led_y + self.led_size,
-                                                fill=color, outline="#333333", width=1)
+                                                fill=color, outline=led_outline, width=1)
                 
     def export_code(self):
         """Export all groupings as C++ byte arrays"""

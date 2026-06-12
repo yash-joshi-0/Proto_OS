@@ -19,6 +19,8 @@ class LEDGrouping:
     ref_char: str = ""  # Reference character for bytecode (auto-generated from name)
     led_color: str = "#f00"
     use_custom_color: bool = False
+    # Optional per-LED colors. If None, file predates color support and default color applies.
+    led_colors: Optional[List[List[Optional[str]]]] = None
     leds: List[List[int]] = field(default_factory=lambda: [[0 for _ in range(8)] for _ in range(8)])
     
     @property
@@ -51,6 +53,19 @@ class LEDGrouping:
                 while len(row) > self.cols:
                     row.pop()
 
+        # Ensure led_colors shape matches leds if provided; keep None to indicate older files
+        if self.led_colors is None:
+            # leave as None to signal legacy files (default color applies)
+            pass
+        else:
+            # normalize size: copy existing values where possible, fill missing with None
+            new_colors = [[None for _ in range(self.cols)] for _ in range(self.rows)]
+            for r in range(min(len(self.led_colors), self.rows)):
+                row_colors = self.led_colors[r] or []
+                for c in range(min(len(row_colors), self.cols)):
+                    new_colors[r][c] = row_colors[c]
+            self.led_colors = new_colors
+
 
 class LEDGridManager:
     def __init__(self, root):
@@ -62,6 +77,14 @@ class LEDGridManager:
         self.selected_grouping: LEDGrouping = None
         self.dragging_grouping: LEDGrouping = None
         self.drag_offset: Tuple[int, int] = (0, 0)
+        # Canvas panning state (world offset in pixels)
+        self.view_offset = [0, 0]
+        self.panning = False
+        self.pan_start = (0, 0)
+        # Zoom state (world units -> screen scale)
+        self.view_scale = 1.0
+        self.min_scale = 0.2
+        self.max_scale = 4.0
         
         self.led_size = 15  # Size of each LED square in pixels (75% of 20)
         self.led_gap = 2    # Gap between LEDs
@@ -70,7 +93,7 @@ class LEDGridManager:
         # Icon storage
         self.icons: Dict[str, Optional[tk.PhotoImage]] = {}
         # Theme colors using Material Design 3 tokens
-        self.theme = "light"
+        self.theme = "dark"
         self.default_led_color = "#f00"
         self.colors = {
             "light": {
@@ -132,6 +155,16 @@ class LEDGridManager:
         self.canvas.bind("<Button-1>", self.on_canvas_click)
         self.canvas.bind("<B1-Motion>", self.on_canvas_drag)
         self.canvas.bind("<ButtonRelease-1>", self.on_canvas_release)
+        # Middle-button (Button-2) pan bindings
+        self.canvas.bind("<Button-2>", self.on_canvas_middle_press)
+        self.canvas.bind("<B2-Motion>", self.on_canvas_middle_motion)
+        self.canvas.bind("<ButtonRelease-2>", self.on_canvas_middle_release)
+        # Mouse wheel zoom (Windows/Linux compatibility)
+        self.canvas.bind("<MouseWheel>", self.on_mouse_wheel)
+        self.canvas.bind("<Button-4>", self.on_mouse_wheel)
+        self.canvas.bind("<Button-5>", self.on_mouse_wheel)
+        # Double middle click to auto-fit
+        self.canvas.bind("<Double-Button-2>", self.on_double_middle)
         self.canvas.bind("<Motion>", self.on_canvas_motion)
         self.canvas.bind("<Button-3>", self.on_canvas_right_click)
         
@@ -177,16 +210,17 @@ class LEDGridManager:
             
     def on_canvas_click(self, event):
         """Handle canvas click - toggle LED or select grouping"""
-        # Check groupings from top (end of list) to bottom
+        # Convert to world coords and check groupings from top (end of list) to bottom
+        wx, wy = self.screen_to_world(event.x, event.y)
         clicked_grouping = None
         for grouping in reversed(self.groupings):
-            clicked_grouping = self.find_grouping_at_in_list(grouping, event.x, event.y)
+            clicked_grouping = self.find_grouping_at_in_list(grouping, wx, wy)
             if clicked_grouping:
                 break
         
         if clicked_grouping:
             # Check if clicked on LED
-            row, col = self.find_led_at(clicked_grouping, event.x, event.y)
+            row, col = self.find_led_at(clicked_grouping, wx, wy)
             if row is not None and col is not None:
                 # Toggle LED
                 clicked_grouping.leds[row][col] = 1 - clicked_grouping.leds[row][col]
@@ -199,15 +233,16 @@ class LEDGridManager:
                     self.groupings.append(clicked_grouping)
                 
                 self.dragging_grouping = clicked_grouping
-                self.drag_offset = (event.x - clicked_grouping.x, event.y - clicked_grouping.y)
+                self.drag_offset = (wx - clicked_grouping.x, wy - clicked_grouping.y)
                 self.selected_grouping = clicked_grouping
                 self.refresh_display()
         
     def on_canvas_drag(self, event):
         """Handle canvas drag"""
         if self.dragging_grouping:
-            self.dragging_grouping.x = event.x - self.drag_offset[0]
-            self.dragging_grouping.y = event.y - self.drag_offset[1]
+            wx, wy = self.screen_to_world(event.x, event.y)
+            self.dragging_grouping.x = wx - self.drag_offset[0]
+            self.dragging_grouping.y = wy - self.drag_offset[1]
             self.refresh_display()
             
     def on_canvas_release(self, event):
@@ -216,17 +251,121 @@ class LEDGridManager:
         
     def on_canvas_motion(self, event):
         """Update cursor based on hover"""
-        grouping = self.find_grouping_at(event.x, event.y)
+        wx, wy = self.screen_to_world(event.x, event.y)
+        grouping = self.find_grouping_at(wx, wy)
         if grouping:
             self.canvas.config(cursor="hand2")
         else:
             self.canvas.config(cursor="arrow")
     
+    def on_canvas_middle_press(self, event):
+        """Start panning the canvas with middle mouse button."""
+        self.panning = True
+        # store starting screen position
+        self.pan_start = (event.x, event.y)
+
+    def on_canvas_middle_motion(self, event):
+        """Handle panning motion while middle button held."""
+        if not self.panning:
+            return
+        dx = event.x - self.pan_start[0]
+        dy = event.y - self.pan_start[1]
+        # update view offset (screen pixels)
+        self.view_offset[0] += dx
+        self.view_offset[1] += dy
+        # reset pan start to current for smooth incremental panning
+        self.pan_start = (event.x, event.y)
+        self.refresh_display()
+
+    def on_canvas_middle_release(self, event):
+        """End panning."""
+        self.panning = False
+
+    def on_mouse_wheel(self, event):
+        """Zoom in/out centered at the mouse cursor."""
+        # Determine mouse position
+        sx, sy = event.x, event.y
+        # Get wheel direction
+        delta = 0
+        try:
+            # Windows: event.delta is multiple of 120
+            delta = event.delta
+        except Exception:
+            # Linux: event.num == 4 (up) or 5 (down)
+            if hasattr(event, 'num') and event.num == 4:
+                delta = 120
+            else:
+                delta = -120
+
+        factor = 1.1 if delta > 0 else 1 / 1.1
+        old_scale = self.view_scale
+        new_scale = max(self.min_scale, min(self.max_scale, old_scale * factor))
+        if new_scale == old_scale:
+            return
+
+        # World coordinate under cursor before zoom
+        wx, wy = self.screen_to_world(sx, sy)
+
+        # Apply new scale and adjust offset so the world point stays under cursor
+        self.view_scale = new_scale
+        self.view_offset[0] = sx - wx * self.view_scale
+        self.view_offset[1] = sy - wy * self.view_scale
+        self.refresh_display()
+
+    def on_double_middle(self, event):
+        """Auto-fit all LEDs into view with generous margin on double middle-click."""
+        if not self.groupings:
+            # reset to defaults
+            self.view_scale = 1.0
+            self.view_offset = [0, 0]
+            self.refresh_display()
+            return
+
+        # Compute world bounding box of all groupings
+        min_x = float('inf')
+        min_y = float('inf')
+        max_x = float('-inf')
+        max_y = float('-inf')
+
+        for g in self.groupings:
+            gx, gy = g.x, g.y
+            cols_pixels = g.col_modules * (8 * (self.led_size + self.led_gap)) + (g.col_modules - 1) * self.module_gap
+            rows_pixels = g.row_modules * (8 * (self.led_size + self.led_gap)) + (g.row_modules - 1) * self.module_gap
+            w = cols_pixels + 10
+            h = rows_pixels + 35
+            min_x = min(min_x, gx)
+            min_y = min(min_y, gy)
+            max_x = max(max_x, gx + w)
+            max_y = max(max_y, gy + h)
+
+        bbox_w = max_x - min_x
+        bbox_h = max_y - min_y
+        if bbox_w <= 0 or bbox_h <= 0:
+            return
+
+        canvas_w = max(1, self.canvas.winfo_width())
+        canvas_h = max(1, self.canvas.winfo_height())
+
+        margin = 0.8  # generous margin (80% of canvas used for content)
+        target_scale = min((canvas_w * margin) / bbox_w, (canvas_h * margin) / bbox_h)
+        target_scale = max(self.min_scale, min(self.max_scale, target_scale))
+
+        # center of bounding box
+        cx = (min_x + max_x) / 2.0
+        cy = (min_y + max_y) / 2.0
+
+        # set scale and offset so that center maps to canvas center
+        self.view_scale = target_scale
+        self.view_offset[0] = canvas_w / 2.0 - cx * self.view_scale
+        self.view_offset[1] = canvas_h / 2.0 - cy * self.view_scale
+        self.refresh_display()
+    
     def on_canvas_right_click(self, event):
         """Handle right-click on canvas"""
+        wx, wy = self.screen_to_world(event.x, event.y)
         clicked_grouping = None
         for grouping in reversed(self.groupings):
-            clicked_grouping = self.find_grouping_at_in_list(grouping, event.x, event.y)
+            clicked_grouping = self.find_grouping_at_in_list(grouping, wx, wy)
             if clicked_grouping:
                 break
         
@@ -343,6 +482,14 @@ class LEDGridManager:
             self.default_led_color = color[1]
             self.refresh_display()
             self.apply_theme()
+
+    def screen_to_world(self, sx: int, sy: int) -> Tuple[int, int]:
+        """Convert screen/canvas coordinates to world coordinates (accounting for view offset)."""
+        return (sx - self.view_offset[0]) / self.view_scale, (sy - self.view_offset[1]) / self.view_scale
+
+    def world_to_screen(self, wx: int, wy: int) -> Tuple[int, int]:
+        """Convert world coordinates to screen/canvas coordinates (accounting for view offset)."""
+        return int(wx * self.view_scale + self.view_offset[0]), int(wy * self.view_scale + self.view_offset[1])
 
     def find_grouping_at(self, x: int, y: int) -> LEDGrouping:
         """Find which grouping is at the given coordinates"""
@@ -520,7 +667,6 @@ class LEDGridManager:
         """Duplicate the selected grouping"""
         if not self.selected_grouping:
             return
-        
         new_grouping = LEDGrouping(
             name=f"{self.selected_grouping.name}_copy",
             x=self.selected_grouping.x + 30,
@@ -529,7 +675,10 @@ class LEDGridManager:
             col_modules=self.selected_grouping.col_modules,
             round_leds=self.selected_grouping.round_leds,
             ref_char=self.selected_grouping.ref_char,
-            leds=[row[:] for row in self.selected_grouping.leds]  # Deep copy
+            leds=[row[:] for row in self.selected_grouping.leds],  # Deep copy
+            led_color=self.selected_grouping.led_color,
+            use_custom_color=self.selected_grouping.use_custom_color,
+            led_colors=([row[:] for row in self.selected_grouping.led_colors] if self.selected_grouping.led_colors is not None else None)
         )
         self.groupings.append(new_grouping)
         self.refresh_display()
@@ -582,15 +731,16 @@ class LEDGridManager:
             self.draw_grouping(grouping, grouping == self.selected_grouping)
             
     def draw_grouping(self, grouping: LEDGrouping, selected: bool = False):
-        """Draw a single grouping on the canvas"""
-        x, y = grouping.x, grouping.y
-        
-        # Calculate width/height with module gaps
+        """Draw a single grouping on the canvas using world->screen transforms."""
+        # World origin for grouping
+        gxw, gyw = grouping.x, grouping.y
+
+        # Calculate width/height in world coords with module gaps
         cols_pixels = grouping.col_modules * (8 * (self.led_size + self.led_gap)) + (grouping.col_modules - 1) * self.module_gap
         rows_pixels = grouping.row_modules * (8 * (self.led_size + self.led_gap)) + (grouping.row_modules - 1) * self.module_gap
-        width = cols_pixels + 10
-        height = rows_pixels + 35
-        
+        width_w = cols_pixels + 10
+        height_w = rows_pixels + 35
+
         cols = self.colors.get(self.theme, self.colors['light'])
         bg_color = cols['surface_variant'] if selected else cols['surface']
         border_color = cols['primary'] if selected else cols['outline']
@@ -600,43 +750,44 @@ class LEDGridManager:
         led_outline = cols['outline']
         border_width = 3 if selected else 1
 
-        self.canvas.create_rectangle(x, y, x + width, y + height,
-                                    fill=bg_color, outline=border_color, width=border_width)
+        # Rectangle corners in screen coords
+        x1, y1 = self.world_to_screen(gxw, gyw)
+        x2, y2 = self.world_to_screen(gxw + width_w, gyw + height_w)
+        self.canvas.create_rectangle(x1, y1, x2, y2, fill=bg_color, outline=border_color, width=border_width)
 
         # Draw title
-        title_y = y + 5
-        self.canvas.create_text(x + 8, title_y, anchor=tk.NW, text=grouping.name,
-                               font=("Segoe UI", 10, "bold"), fill=title_color)
-        
-        # Draw LEDs with module gaps
-        led_start_x = x + 5
-        led_start_y = y + 30
-        
+        tx, ty = self.world_to_screen(gxw + 8, gyw + 5)
+        self.canvas.create_text(tx, ty, anchor=tk.NW, text=grouping.name, font=("Segoe UI", 10, "bold"), fill=title_color)
+
+        # Draw LEDs with module gaps - compute LED positions in world coords then transform
         for row in range(grouping.rows):
             for col in range(grouping.cols):
-                # Calculate which module this LED belongs to
                 module_row = row // 8
                 module_col = col // 8
                 row_in_module = row % 8
                 col_in_module = col % 8
-                
-                # Calculate position with module gaps
-                led_x = led_start_x + col_in_module * (self.led_size + self.led_gap) + module_col * (8 * (self.led_size + self.led_gap) + self.module_gap)
-                led_y = led_start_y + row_in_module * (self.led_size + self.led_gap) + module_row * (8 * (self.led_size + self.led_gap) + self.module_gap)
-                
+
+                led_x_w = gxw + 5 + col_in_module * (self.led_size + self.led_gap) + module_col * (8 * (self.led_size + self.led_gap) + self.module_gap)
+                led_y_w = gyw + 30 + row_in_module * (self.led_size + self.led_gap) + module_row * (8 * (self.led_size + self.led_gap) + self.module_gap)
+
+                # Convert to screen coords
+                sx1, sy1 = self.world_to_screen(led_x_w, led_y_w)
+                sx2, sy2 = self.world_to_screen(led_x_w + self.led_size, led_y_w + self.led_size)
+
                 is_on = grouping.leds[row][col]
-                color = led_on_color if is_on else led_off_color
-                
-                if grouping.round_leds:
-                    # Draw round LED
-                    self.canvas.create_oval(led_x, led_y, 
-                                           led_x + self.led_size, led_y + self.led_size,
-                                           fill=color, outline=led_outline, width=1)
+                if is_on:
+                    # prefer per-LED color when provided; otherwise grouping or default
+                    if grouping.led_colors is not None and grouping.led_colors[row][col]:
+                        color = grouping.led_colors[row][col]
+                    else:
+                        color = grouping.led_color if grouping.use_custom_color else self.default_led_color
                 else:
-                    # Draw square LED
-                    self.canvas.create_rectangle(led_x, led_y, 
-                                                led_x + self.led_size, led_y + self.led_size,
-                                                fill=color, outline=led_outline, width=1)
+                    color = led_off_color
+
+                if grouping.round_leds:
+                    self.canvas.create_oval(sx1, sy1, sx2, sy2, fill=color, outline=led_outline, width=1)
+                else:
+                    self.canvas.create_rectangle(sx1, sy1, sx2, sy2, fill=color, outline=led_outline, width=1)
                 
     def export_code(self):
         """Export all groupings as C++ byte arrays"""

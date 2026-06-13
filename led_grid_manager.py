@@ -539,7 +539,7 @@ class LEDGridManager:
             module_width = 8 * (self.led_size + self.led_gap)
             if x_pos < module_width:
                 module_col = m
-                col_in_module = x_pos // (self.led_size + self.led_gap)
+                col_in_module = int(x_pos // (self.led_size + self.led_gap))
                 break
             x_pos -= (module_width + self.module_gap)
         else:
@@ -554,7 +554,7 @@ class LEDGridManager:
             module_height = 8 * (self.led_size + self.led_gap)
             if y_pos < module_height:
                 module_row = m
-                row_in_module = y_pos // (self.led_size + self.led_gap)
+                row_in_module = int(y_pos // (self.led_size + self.led_gap))
                 break
             y_pos -= (module_height + self.module_gap)
         else:
@@ -562,8 +562,8 @@ class LEDGridManager:
             return None, None
         
         # Convert to absolute LED position
-        col = module_col * 8 + col_in_module
-        row = module_row * 8 + row_in_module
+        col = int(module_col * 8 + col_in_module)
+        row = int(module_row * 8 + row_in_module)
         
         if 0 <= row < grouping.rows and 0 <= col < grouping.cols:
             return row, col

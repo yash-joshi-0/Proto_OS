@@ -7,9 +7,9 @@
 
 // pins
 #define BUTTON_PIN 7
-#define CLK_PIN   4
-#define DATA_PIN  2
-#define CS_PIN    3
+#define CLK_PIN   13
+#define DATA_PIN  11
+#define CS_PIN    12
 
 MD_MAX72XX M = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 
@@ -35,10 +35,22 @@ unsigned long nextBlinkTime = 0;
 unsigned long blinkStartTime = 0;
 bool isBlinking = false;
 
-// reaction
+// reaction vars
 bool animatingMouth = false;
 uint8_t mouthStep = 0;
 unsigned long lastMouthAnim = 0;
+
+// reaction sequence state vars
+uint8_t reactionPhase = 0;
+unsigned long reactionTimer = 0;
+uint8_t mouthCycleCount = 0;
+
+// button detection vars
+int buttonIdleState = HIGH;
+const unsigned long DEBOUNCE_MS = 50;
+int lastRawButton = HIGH;
+unsigned long lastDebounceTime = 0;
+bool debouncedPressed = false;
 
 // blink graphics
 const byte Blink1[8] = {
@@ -166,7 +178,8 @@ void drawModule(uint8_t device, const byte data[8], uint8_t mode)
         if (mode & FLIP_Y) y = 7 - y;
       }
 
-      M.setPoint(y, x, pixel);
+      uint16_t globalCol = device * 8 + x;
+      M.setPoint(y, globalCol, pixel);
     }
   }
 }
@@ -174,64 +187,72 @@ void drawModule(uint8_t device, const byte data[8], uint8_t mode)
 // eyes
 void displayEyes()
 {
-  drawModule(EYE_L_START + 0, E1, FLIP_Y);
-  drawModule(EYE_L_START + 1, E2, FLIP_Y);
-  drawModule(EYE_R_START + 0, E1, FLIP_180);
-  drawModule(EYE_R_START + 1, E2, FLIP_180);
+  M.update(MD_MAX72XX::OFF);
+  drawModule(EYE_L_START + 0, E1, FLIP_180);
+  drawModule(EYE_L_START + 1, E2, FLIP_180);
+  drawModule(EYE_R_START + 0, E2, FLIP_Y);
+  drawModule(EYE_R_START + 1, E1, FLIP_Y);
+  M.update();
 }
 
 // nose
 void displayNose()
 {
-  drawModule(NOSE_L, N1, FLIP_Y);
-  drawModule(NOSE_R, N1, FLIP_180);
+  M.update(MD_MAX72XX::OFF);
+  drawModule(NOSE_L, N1, FLIP_180);
+  drawModule(NOSE_R, N1, FLIP_Y);
+  M.update();
 }
 
 // mouth static
 void displayMouth()
 {
-  drawModule(MOUTH_L_START + 0, M1, FLIP_X);
-  drawModule(MOUTH_L_START + 1, M2, FLIP_X);
-  drawModule(MOUTH_L_START + 2, M3, FLIP_X);
-  drawModule(MOUTH_L_START + 3, M4, FLIP_X);
+  M.update(MD_MAX72XX::OFF);
+  drawModule(MOUTH_L_START + 0, M4, 0);
+  drawModule(MOUTH_L_START + 1, M3, 0);
+  drawModule(MOUTH_L_START + 2, M2, 0);
+  drawModule(MOUTH_L_START + 3, M1, 0);
 
-  drawModule(MOUTH_R_START + 0, M1, 0);
-  drawModule(MOUTH_R_START + 1, M2, 0);
-  drawModule(MOUTH_R_START + 2, M3, 0);
-  drawModule(MOUTH_R_START + 3, M4, 0);
+  drawModule(MOUTH_R_START + 0, M1, FLIP_X);
+  drawModule(MOUTH_R_START + 1, M2, FLIP_X);
+  drawModule(MOUTH_R_START + 2, M3, FLIP_X);
+  drawModule(MOUTH_R_START + 3, M4, FLIP_X);
+  M.update();
 }
 
 // mouth animation
 void displayMouthAnimated(uint8_t step)
 {
-  drawModule(0,  M1, FLIP_X);
-  drawModule(1,  M2, FLIP_X);
-  drawModule(2,  M3, FLIP_X);
-  drawModule(3,  M4, FLIP_X);
+  M.update(MD_MAX72XX::OFF);
+  drawModule(MOUTH_L_START + 0,  M4, 0);
+  drawModule(MOUTH_L_START + 1,  M3, 0);
+  drawModule(MOUTH_L_START + 2,  M2, 0);
+  drawModule(MOUTH_L_START + 3,  M1, 0);
 
-  drawModule(10, M1, 0);
-  drawModule(11, M2, 0);
-  drawModule(12, M3, 0);
-  drawModule(13, M4, 0);
+  drawModule(MOUTH_R_START + 0, M1, FLIP_X);
+  drawModule(MOUTH_R_START + 1, M2, FLIP_X);
+  drawModule(MOUTH_R_START + 2, M3, FLIP_X);
+  drawModule(MOUTH_R_START + 3, M4, FLIP_X);
 
-  if (step > 0) M.clear(3);
-  if (step > 1) M.clear(2);
-  if (step > 2) M.clear(1);
-  if (step > 3) M.clear(0);
+  if (step > 0) M.clear(MOUTH_L_START + 3);
+  if (step > 1) M.clear(MOUTH_L_START + 2);
+  if (step > 2) M.clear(MOUTH_L_START + 1);
 
-  if (step > 3) M.clear(10);
-  if (step > 2) M.clear(11);
-  if (step > 1) M.clear(12);
-  if (step > 0) M.clear(13);
+  if (step > 2) M.clear(MOUTH_R_START + 2);
+  if (step > 1) M.clear(MOUTH_R_START + 1);
+  if (step > 0) M.clear(MOUTH_R_START + 0);
+  M.update();
 }
 
 // blink
 void drawBlink()
 {
-  drawModule(EYE_L_START + 0, Blink1, FLIP_Y);
-  drawModule(EYE_L_START + 1, Blink2, FLIP_Y);
-  drawModule(EYE_R_START + 0, Blink1, FLIP_180);
-  drawModule(EYE_R_START + 1, Blink2, FLIP_180);
+  M.update(MD_MAX72XX::OFF);
+  drawModule(EYE_L_START + 0, Blink1, FLIP_180);
+  drawModule(EYE_L_START + 1, Blink2, FLIP_180);
+  drawModule(EYE_R_START + 0, Blink2, FLIP_Y);
+  drawModule(EYE_R_START + 1, Blink1, FLIP_Y);
+  M.update();
 }
 
 // idle update
@@ -269,52 +290,98 @@ void updateReaction()
 {
   if (!animatingMouth) return;
 
-  if (millis() - lastMouthAnim > 120)
-  {
-    lastMouthAnim = millis();
+  unsigned long now = millis();
 
-    if (mouthStep < 4)
-    {
-      mouthStep++;
-      displayMouthAnimated(mouthStep);
-    }
-    else
-    {
-      animatingMouth = false;
-      faceState = IDLE;
-    }
+  switch (reactionPhase)
+  {
+    case 0:
+      drawBlink();
+      reactionPhase = 1;
+      mouthStep = 0;
+      mouthCycleCount = 0;
+      lastMouthAnim = now;
+      break;
+
+    case 1:
+      if (now - lastMouthAnim > 20)
+      {
+        lastMouthAnim = now;
+        if (mouthStep < 4)
+        {
+          mouthStep++;
+          displayMouthAnimated(mouthStep);
+        }
+        else
+        {
+          reactionPhase = 2;
+          reactionTimer = now;
+        }
+      }
+      break;
+
+    case 2:
+      if (now - reactionTimer < 150) {}
+      break;
   }
 }
 
 // button
 void checkButton()
 {
-  static bool last = HIGH;
-  bool now = digitalRead(BUTTON_PIN);
+  int raw = digitalRead(BUTTON_PIN);
+  bool pressedRaw = (raw != buttonIdleState);
 
-  if (last == HIGH && now == LOW)
+  if (raw != lastRawButton)
   {
-    faceState = REACT;
-
-    animatingMouth = true;
-    mouthStep = 0;
-    lastMouthAnim = millis();
-
-    displayMouthAnimated(0);
-    drawBlink();
+    lastDebounceTime = millis();
+    lastRawButton = raw;
   }
 
-  last = now;
+  if ((millis() - lastDebounceTime) > DEBOUNCE_MS)
+  {
+    if (debouncedPressed != pressedRaw)
+    {
+      debouncedPressed = pressedRaw;
+
+      if (debouncedPressed)
+      {
+        // button pressed
+        faceState = REACT;
+        animatingMouth = true;
+        reactionPhase = 0;
+        mouthStep = 0;
+        mouthCycleCount = 0;
+        lastMouthAnim = millis();
+        drawBlink();
+      }
+      else
+      {
+        // button released
+        animatingMouth = false;
+        faceState = IDLE;
+        mouthStep = 0;
+        reactionPhase = 0;
+        displayMouth();
+        displayEyes();
+        displayNose();
+      }
+    }
+  }
 }
 
 // setup
 void setup()
 {
   M.begin();
-  M.control(MD_MAX72XX::INTENSITY, 5);
+  M.control(MD_MAX72XX::INTENSITY, 1);
   M.clear();
 
   pinMode(BUTTON_PIN, INPUT_PULLUP);
+
+  buttonIdleState = digitalRead(BUTTON_PIN);
+  lastRawButton = digitalRead(BUTTON_PIN);
+  debouncedPressed = (lastRawButton != buttonIdleState);
+  lastDebounceTime = millis();
 
   randomSeed(analogRead(0));
 

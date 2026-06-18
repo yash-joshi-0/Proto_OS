@@ -1,23 +1,34 @@
 #include <MD_MAX72xx.h>
+#include <FastLED.h>
 #include <SPI.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_SH110X.h>
 
+// quick edit, keep as integers (should be the only thing you need to touch)
+#define TEXTSIZE          1       // oled text size
+#define PANEL_BRIGHTNESS  1
+#define SIDE_BRIGHTNESS   128
+#define LED_COLOR         CRGB::Green
+
+
 // config
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES   14
+#define NUM_LEDS      60
+#define LED_TYPE      WS2812
+#define COLOR_ORDER   GRB
 
 // display config
 #define WIDTH         128
 #define HEIGHT        64
-#define TEXTSIZE      1
 #define NONDETECT     "_"
 #define DETECT        "O"
 int charX[] = {30 * TEXTSIZE, 36 * TEXTSIZE};
 int charY[] = {0 * TEXTSIZE, 8 * TEXTSIZE};
 
 // pins
+#define LED_PIN       4
 #define OLED_CLK      5
 #define OLED_MOSI     6
 #define OLED_RST      7
@@ -28,6 +39,7 @@ int charY[] = {0 * TEXTSIZE, 8 * TEXTSIZE};
 #define DATA_PIN      11
 #define CS_PIN        12
 
+CRGB leds[NUM_LEDS];
 MD_MAX72XX M = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 Adafruit_SH1106G display = Adafruit_SH1106G(WIDTH, HEIGHT, OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
 
@@ -423,8 +435,11 @@ void checkButton()
 void setup()
 {
   M.begin();
-  M.control(MD_MAX72XX::INTENSITY, 1);
+  M.control(MD_MAX72XX::INTENSITY, PANEL_BRIGHTNESS);
   M.clear();
+
+  FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
+  FastLED.setBrightness(SIDE_BRIGHTNESS);
 
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
@@ -441,6 +456,13 @@ void setup()
 
   display.begin(0, true);
   initScreen();
+
+  for (int i = 0; i < NUM_LEDS; i++)
+  {
+    leds[i] = CRGB::Black;
+    leds[i] = LED_COLOR;
+  }
+  FastLED.show();
 
   nextBlinkTime = millis() + random(5000, 10000);
 }

@@ -6,7 +6,16 @@
 
 // config
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
-#define MAX_DEVICES 14
+#define MAX_DEVICES   14
+
+// display config
+#define WIDTH         128
+#define HEIGHT        64
+#define TEXTSIZE      1
+#define NONDETECT     "_"
+#define DETECT        "O"
+int charX[] = {30 * TEXTSIZE, 36 * TEXTSIZE};
+int charY[] = {0 * TEXTSIZE, 8 * TEXTSIZE};
 
 // pins
 #define OLED_CLK      5
@@ -20,6 +29,8 @@
 #define CS_PIN        12
 
 MD_MAX72XX M = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
+Adafruit_SH1106G display = Adafruit_SH1106G(WIDTH, HEIGHT, OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
+
 
 // face layout
 #define MOUTH_L_START 0
@@ -252,6 +263,35 @@ void displayMouthAnimated(uint8_t step)
   M.update();
 }
 
+// screen init
+void initScreen() {
+  display.clearDisplay();
+  display.setTextSize(TEXTSIZE);
+  display.setTextColor(SH110X_WHITE);
+  display.setCursor(0, 0);
+  display.print("Mic: ");
+  display.println(NONDETECT);
+  display.print("Boop: ");
+  display.println(NONDETECT);
+  display.display();
+}
+
+// character update
+void setChar(int idx, int state, int delayTime = 0) {
+  String charClear = (state == 0) ? DETECT : NONDETECT;
+  String charOut = (state == 0) ? NONDETECT : DETECT;
+
+  display.setCursor(charX[idx], charY[idx]);
+  display.setTextColor(SH110X_BLACK);
+  display.println(charClear);
+  display.display();
+  display.setCursor(charX[idx], charY[idx]);
+  display.setTextColor(SH110X_WHITE);
+  display.println(charOut);
+  display.display();
+  delay(delayTime);
+}
+
 // blink
 void drawBlink()
 {
@@ -361,6 +401,7 @@ void checkButton()
         mouthCycleCount = 0;
         lastMouthAnim = millis();
         drawBlink();
+        setChar(1, 1);
       }
       else
       {
@@ -369,6 +410,7 @@ void checkButton()
         faceState = IDLE;
         mouthStep = 0;
         reactionPhase = 0;
+        setChar(1, 0);
         displayMouth();
         displayEyes();
         displayNose();
@@ -396,6 +438,9 @@ void setup()
   displayEyes();
   displayMouth();
   displayNose();
+
+  display.begin(0, true);
+  initScreen();
 
   nextBlinkTime = millis() + random(5000, 10000);
 }

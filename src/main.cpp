@@ -1,15 +1,23 @@
 #include <MD_MAX72xx.h>
 #include <SPI.h>
+#include <Wire.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SH110X.h>
 
 // config
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES 14
 
 // pins
-#define BUTTON_PIN 7
-#define CLK_PIN   13
-#define DATA_PIN  11
-#define CS_PIN    12
+#define OLED_CLK      5
+#define OLED_MOSI     6
+#define OLED_RST      7
+#define OLED_DC       8
+#define OLED_CS       9
+#define BUTTON_PIN    10
+#define CLK_PIN       13
+#define DATA_PIN      11
+#define CS_PIN        12
 
 MD_MAX72XX M = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 

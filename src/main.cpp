@@ -28,19 +28,21 @@
 int charX[] = {30 * TEXTSIZE, 36 * TEXTSIZE};
 int charY[] = {0 * TEXTSIZE, 8 * TEXTSIZE};
 
-// pins
-#define LED_PIN       A1
-#define OLED_CLK      4
-#define OLED_MOSI     6
-#define OLED_RST      7
-#define OLED_DC       8
-#define OLED_CS       9
+// pins (OLED Placeholder vals)
+#define OLED_CLK      1
+#define OLED_MOSI     1
+#define OLED_RST      1
+#define OLED_DC       1
+#define OLED_CS       1
+#define LED1_PIN      8
+#define LED2_PIN      9
 #define BUTTON_PIN    10
 #define CLK_PIN       13
 #define DATA_PIN      11
 #define CS_PIN        12
 
-CRGB leds[NUM_LEDS];
+CRGB leds1[NUM_LEDS];
+CRGB leds2[NUM_LEDS];
 MD_MAX72XX M = MD_MAX72XX(HARDWARE_TYPE, DATA_PIN, CLK_PIN, CS_PIN, MAX_DEVICES);
 Adafruit_SH1106G display = Adafruit_SH1106G(WIDTH, HEIGHT, OLED_MOSI, OLED_CLK, OLED_DC, OLED_RST, OLED_CS);
 
@@ -327,7 +329,8 @@ void updateIdle()
 
     for (int i = 0; i < NUM_LEDS; i++)
     {
-      leds[i] = LED_COLOR;
+      leds1[i] = LED_COLOR;
+      leds2[i] = LED_COLOR;
     }
     FastLED.show();
   }
@@ -445,11 +448,13 @@ void setup()
   M.control(MD_MAX72XX::INTENSITY, PANEL_BRIGHTNESS);
   M.clear();
 
-  FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
+  FastLED.addLeds<LED_TYPE, LED1_PIN, COLOR_ORDER>(leds1, NUM_LEDS);
+  FastLED.addLeds<LED_TYPE, LED2_PIN, COLOR_ORDER>(leds2, NUM_LEDS);
   FastLED.setBrightness(SIDE_BRIGHTNESS);
 
   for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = LED_COLOR;
+    leds1[i] = LED_COLOR;
+    leds2[i] = LED_COLOR;
   }
   FastLED.show();
 
@@ -483,4 +488,5 @@ void loop()
     case BLINK: updateBlink(); break;
     case REACT: updateReaction(); break;
   }
+
 }

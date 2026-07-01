@@ -1,12 +1,9 @@
-#pragma once
-
 #ifndef __INC_FL_DELAY_H
 #define __INC_FL_DELAY_H
 
 #include "FastLED.h"
 #include "fl/types.h"
 #include "fl/force_inline.h"
-#include "fl/int.h"
 
 /// @file fastled_delay.h
 /// Utility functions and classes for managing delay cycles
@@ -20,7 +17,7 @@ FASTLED_NAMESPACE_BEGIN
 /// @tparam WAIT The amount of time to wait, in microseconds
 template<int WAIT> class CMinWait {
 	/// Timestamp of the last time this was run, in microseconds
-	fl::u16 mLastMicros;
+	uint16_t mLastMicros;
 
 public:
 	/// Constructor
@@ -28,7 +25,7 @@ public:
 
 	/// Blocking delay until WAIT time since mark() has passed
 	void wait() {
-		fl::u16 diff;
+		uint16_t diff;
 		do {
 			diff = (micros() & 0xFFFF) - mLastMicros;
 		} while(diff < WAIT);
@@ -169,9 +166,9 @@ template<> FASTLED_FORCE_INLINE void delaycycles<5>() {FL_NOP2;FL_NOP2;FL_NOP;}
 template<> FASTLED_FORCE_INLINE void delaycycles<4294966398>() {
 	// specialization for a gigantic amount of cycles, apparently this is needed
 	// or esp32 will blow the stack with cycles = 4294966398.
-	const fl::u32 termination = 4294966398 / 10;
-	const fl::u32 remainder = 4294966398 % 10;
-	for (fl::u32 i = 0; i < termination; i++) {
+	const uint32_t termination = 4294966398 / 10;
+	const uint32_t remainder = 4294966398 % 10;
+	for (uint32_t i = 0; i < termination; i++) {
 		FL_NOP; FL_NOP; FL_NOP; FL_NOP; FL_NOP;
 		FL_NOP; FL_NOP; FL_NOP; FL_NOP; FL_NOP;
 	}

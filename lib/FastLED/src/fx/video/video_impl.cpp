@@ -7,23 +7,25 @@
 #include "fl/namespace.h"
 #include "fl/warn.h"
 
+using namespace fl;
+
 namespace fl {
 
 VideoImpl::VideoImpl(size_t pixelsPerFrame, float fpsVideo,
                      size_t nFramesInBuffer)
     : mPixelsPerFrame(pixelsPerFrame),
       mFrameInterpolator(
-          fl::make_shared<FrameInterpolator>(MAX(1, nFramesInBuffer), fpsVideo)) {}
+          FrameInterpolatorPtr::New(MAX(1, nFramesInBuffer), fpsVideo)) {}
 
-void VideoImpl::pause(fl::u32 now) {
+void VideoImpl::pause(uint32_t now) {
     if (!mTime) {
-        mTime = fl::make_shared<TimeWarp>(now);
+        mTime = TimeScalePtr::New(now);
     }
     mTime->pause(now);
 }
-void VideoImpl::resume(fl::u32 now) {
+void VideoImpl::resume(uint32_t now) {
     if (!mTime) {
-        mTime = fl::make_shared<TimeWarp>(now);
+        mTime = TimeScalePtr::New(now);
     }
     mTime->resume(now);
 }
@@ -31,17 +33,17 @@ void VideoImpl::resume(fl::u32 now) {
 void VideoImpl::setTimeScale(float timeScale) {
     mTimeScale = timeScale;
     if (mTime) {
-        mTime->setSpeed(timeScale);
+        mTime->setScale(timeScale);
     }
 }
 
-void VideoImpl::setFade(fl::u32 fadeInTime, fl::u32 fadeOutTime) {
+void VideoImpl::setFade(uint32_t fadeInTime, uint32_t fadeOutTime) {
     mFadeInTime = fadeInTime;
     mFadeOutTime = fadeOutTime;
 }
 
-bool VideoImpl::needsFrame(fl::u32 now) const {
-    fl::u32 f1, f2;
+bool VideoImpl::needsFrame(uint32_t now) const {
+    uint32_t f1, f2;
     bool out = mFrameInterpolator->needsFrame(now, &f1, &f2);
     return out;
 }
@@ -51,14 +53,14 @@ VideoImpl::~VideoImpl() { end(); }
 void VideoImpl::begin(FileHandlePtr h) {
     end();
     // Removed setStartTime call
-    mStream = fl::make_shared<PixelStream>(mPixelsPerFrame * kSizeRGB8);
+    mStream = PixelStreamPtr::New(mPixelsPerFrame * kSizeRGB8);
     mStream->begin(h);
     mPrevNow = 0;
 }
 
 void VideoImpl::beginStream(ByteStreamPtr bs) {
     end();
-    mStream = fl::make_shared<PixelStream>(mPixelsPerFrame * kSizeRGB8);
+    mStream = PixelStreamPtr::New(mPixelsPerFrame * kSizeRGB8);
     // Removed setStartTime call
     mStream->beginStream(bs);
     mPrevNow = 0;
@@ -72,7 +74,7 @@ void VideoImpl::end() {
 
 bool VideoImpl::full() const { return mFrameInterpolator->getFrames()->full(); }
 
-bool VideoImpl::draw(fl::u32 now, Frame *frame) {
+bool VideoImpl::draw(uint32_t now, Frame *frame) {
     return draw(now, frame->rgb());
 }
 
@@ -82,17 +84,16 @@ int32_t VideoImpl::durationMicros() const {
     }
     int32_t frames = mStream->framesRemaining();
     if (frames < 0) {
-        return -1; // Stream case, duration unknown
+        return -1;  // Stream case, duration unknown
     }
-    fl::u32 micros_per_frame =
-        mFrameInterpolator->getFrameTracker().microsecondsPerFrame();
-    return (frames * micros_per_frame); // Convert to milliseconds
+    uint32_t micros_per_frame = mFrameInterpolator->getFrameTracker().microsecondsPerFrame();
+    return (frames * micros_per_frame);  // Convert to milliseconds
 }
 
-bool VideoImpl::draw(fl::u32 now, CRGB *leds) {
+bool VideoImpl::draw(uint32_t now, CRGB *leds) {
     if (!mTime) {
-        mTime = fl::make_shared<TimeWarp>(now);
-        mTime->setSpeed(mTimeScale);
+        mTime = TimeScalePtr::New(now);
+        mTime->setScale(mTimeScale);
         mTime->reset(now);
     }
     now = mTime->update(now);
@@ -108,8 +109,8 @@ bool VideoImpl::draw(fl::u32 now, CRGB *leds) {
     }
     mFrameInterpolator->draw(now, leds);
 
-    fl::u32 time = mTime->time();
-    fl::u32 brightness = 255;
+    uint32_t time = mTime->time();
+    uint32_t brightness = 255;
     // Compute fade in/out brightness.
     if (mFadeInTime || mFadeOutTime) {
         brightness = 255;
@@ -127,9 +128,9 @@ bool VideoImpl::draw(fl::u32 now, CRGB *leds) {
             } else {
                 FrameTracker &frame_tracker =
                     mFrameInterpolator->getFrameTracker();
-                fl::u32 micros_per_frame =
+                uint32_t micros_per_frame =
                     frame_tracker.microsecondsPerFrame();
-                fl::u32 millis_left =
+                uint32_t millis_left =
                     (frames_remaining * micros_per_frame) / 1000;
                 if (millis_left < mFadeOutTime) {
                     brightness = millis_left * 255 / mFadeOutTime;
@@ -151,7 +152,7 @@ bool VideoImpl::draw(fl::u32 now, CRGB *leds) {
     return true;
 }
 
-bool VideoImpl::updateBufferFromStream(fl::u32 now) {
+bool VideoImpl::updateBufferFromStream(uint32_t now) {
     FASTLED_ASSERT(mTime, "mTime is null");
     if (!mStream) {
         FASTLED_WARN("no stream");
@@ -161,8 +162,8 @@ bool VideoImpl::updateBufferFromStream(fl::u32 now) {
         return false;
     }
 
-    fl::u32 currFrameNumber = 0;
-    fl::u32 nextFrameNumber = 0;
+    uint32_t currFrameNumber = 0;
+    uint32_t nextFrameNumber = 0;
     bool needs_frame =
         mFrameInterpolator->needsFrame(now, &currFrameNumber, &nextFrameNumber);
     if (!needs_frame) {
@@ -177,7 +178,7 @@ bool VideoImpl::updateBufferFromStream(fl::u32 now) {
     const bool has_current_frame = mFrameInterpolator->has(currFrameNumber);
     const bool has_next_frame = mFrameInterpolator->has(nextFrameNumber);
 
-    fl::FixedVector<fl::u32, 2> frame_numbers;
+    fl::FixedVector<uint32_t, 2> frame_numbers;
     if (!has_current_frame) {
         frame_numbers.push_back(currFrameNumber);
     }
@@ -189,7 +190,7 @@ bool VideoImpl::updateBufferFromStream(fl::u32 now) {
     for (size_t i = 0; i < frame_numbers.size(); ++i) {
         FramePtr recycled_frame;
         if (mFrameInterpolator->full()) {
-            fl::u32 frame_to_erase = 0;
+            uint32_t frame_to_erase = 0;
             bool ok =
                 mFrameInterpolator->get_oldest_frame_number(&frame_to_erase);
             if (!ok) {
@@ -202,10 +203,10 @@ bool VideoImpl::updateBufferFromStream(fl::u32 now) {
                 return false;
             }
         }
-        fl::u32 frame_to_fetch = frame_numbers[i];
+        uint32_t frame_to_fetch = frame_numbers[i];
         if (!recycled_frame) {
             // Happens when we are not full and we need to allocate a new frame.
-            recycled_frame = fl::make_shared<Frame>(mPixelsPerFrame);
+            recycled_frame = FramePtr::New(mPixelsPerFrame);
         }
 
         if (!mStream->readFrame(recycled_frame.get())) {
@@ -235,9 +236,9 @@ bool VideoImpl::updateBufferFromStream(fl::u32 now) {
     return true;
 }
 
-bool VideoImpl::updateBufferFromFile(fl::u32 now, bool forward) {
-    fl::u32 currFrameNumber = 0;
-    fl::u32 nextFrameNumber = 0;
+bool VideoImpl::updateBufferFromFile(uint32_t now, bool forward) {
+    uint32_t currFrameNumber = 0;
+    uint32_t nextFrameNumber = 0;
     bool needs_frame =
         mFrameInterpolator->needsFrame(now, &currFrameNumber, &nextFrameNumber);
     if (!needs_frame) {
@@ -253,7 +254,7 @@ bool VideoImpl::updateBufferFromFile(fl::u32 now, bool forward) {
         return false;
     }
 
-    fl::FixedVector<fl::u32, 2> frame_numbers;
+    fl::FixedVector<uint32_t, 2> frame_numbers;
     if (!mFrameInterpolator->has(currFrameNumber)) {
         frame_numbers.push_back(currFrameNumber);
     }
@@ -265,7 +266,7 @@ bool VideoImpl::updateBufferFromFile(fl::u32 now, bool forward) {
     for (size_t i = 0; i < frame_numbers.size(); ++i) {
         FramePtr recycled_frame;
         if (mFrameInterpolator->full()) {
-            fl::u32 frame_to_erase = 0;
+            uint32_t frame_to_erase = 0;
             bool ok = false;
             if (forward) {
                 ok = mFrameInterpolator->get_oldest_frame_number(
@@ -288,10 +289,10 @@ bool VideoImpl::updateBufferFromFile(fl::u32 now, bool forward) {
                 return false;
             }
         }
-        fl::u32 frame_to_fetch = frame_numbers[i];
+        uint32_t frame_to_fetch = frame_numbers[i];
         if (!recycled_frame) {
             // Happens when we are not full and we need to allocate a new frame.
-            recycled_frame = fl::make_shared<Frame>(mPixelsPerFrame);
+            recycled_frame = FramePtr::New(mPixelsPerFrame);
         }
 
         do { // only to use break
@@ -329,7 +330,7 @@ bool VideoImpl::updateBufferFromFile(fl::u32 now, bool forward) {
     return true;
 }
 
-bool VideoImpl::updateBufferIfNecessary(fl::u32 prev, fl::u32 now) {
+bool VideoImpl::updateBufferIfNecessary(uint32_t prev, uint32_t now) {
     const bool forward = now >= prev;
 
     PixelStream::Type type = mStream->getType();
@@ -339,7 +340,7 @@ bool VideoImpl::updateBufferIfNecessary(fl::u32 prev, fl::u32 now) {
     case PixelStream::kStreaming:
         return updateBufferFromStream(now);
     default:
-        FASTLED_WARN("Unknown type: " << fl::u32(type));
+        FASTLED_WARN("Unknown type: " << uint32_t(type));
         return false;
     }
 }

@@ -4,14 +4,14 @@
 #error "why is this being included?"
 #endif
 
-#include "fl/stdint.h"
+#include <stdint.h>
 #include "fl/namespace.h"
 #include "fl/unused.h"
 
 // Signal to the engine that all pins are hardware SPI
 #define FASTLED_ALL_PINS_HARDWARE_SPI
 
-namespace fl {
+FASTLED_NAMESPACE_BEGIN
 
 class StubSPIOutput {
 public:
@@ -25,4 +25,5 @@ public:
 };
 
 
-}  // namespace fl
+FASTLED_NAMESPACE_END
+

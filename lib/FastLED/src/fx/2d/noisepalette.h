@@ -4,15 +4,15 @@
 
 #pragma once
 
-#include "fl/stdint.h"
+#include <stdint.h>
 
 #include "FastLED.h"
-#include "fl/memory.h"
-#include "fl/xymap.h"
 #include "fx/fx2d.h"
-#include "fx/time.h"
 #include "lib8tion/random8.h"
 #include "noise.h"
+#include "fl/ptr.h"
+#include "fl/xymap.h"
+#include "fx/time.h"
 
 namespace fl {
 
@@ -20,8 +20,7 @@ FASTLED_SMART_PTR(NoisePalette);
 
 class NoisePalette : public Fx2d {
   public:
-    // Fps is used by the fx_engine to maintain a fixed frame rate, ignored
-    // otherwise.
+    // Fps is used by the fx_engine to maintain a fixed frame rate, ignored otherwise.
     NoisePalette(XYMap xyMap, float fps = 60.f);
 
     bool hasFixedFrameRate(float *fps) const override {
@@ -61,7 +60,7 @@ class NoisePalette : public Fx2d {
     uint16_t width, height;
     uint16_t speed = 0;
     uint16_t scale = 0;
-    fl::vector<uint8_t, fl::allocator_psram<uint8_t>> noise;
+    fl::scoped_array<uint8_t> noise;
     CRGBPalette16 currentPalette;
     bool colorLoop = 0;
     int currentPaletteIndex = 0;
@@ -100,4 +99,4 @@ class NoisePalette : public Fx2d {
     }
 };
 
-} // namespace fl
+}  // namespace fl

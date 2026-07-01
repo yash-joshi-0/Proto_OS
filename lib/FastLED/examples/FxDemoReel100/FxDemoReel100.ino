@@ -1,24 +1,9 @@
-/// @file    FxDemoReel100.ino
-/// @brief   DemoReel100 effects collection with ScreenMap
-/// @example FxDemoReel100.ino
-///
-/// This sketch is fully compatible with the FastLED web compiler. To use it do the following:
-/// 1. Install Fastled: `pip install fastled`
-/// 2. cd into this examples page.
-/// 3. Run the FastLED web compiler at root: `fastled`
-/// 4. When the compiler is done a web page will open.
+/// @file    DemoReel100.ino
+/// @brief   FastLED "100 lines of code" demo reel, showing off some effects
+/// @example DemoReel100.ino
 
 #include <FastLED.h>
 #include "fx/1d/demoreel100.h"
-#include "fl/screenmap.h"
-#include "defs.h"  // for NUM_LEDS
-
-
-#if !HAS_ENOUGH_MEMORY
-void setup() {}
-void loop() {}
-#else
-
 
 using namespace fl;
 
@@ -27,7 +12,6 @@ using namespace fl;
 #define LED_TYPE    WS2811
 #define COLOR_ORDER GRB
 #define NUM_LEDS    64
-
 CRGB leds[NUM_LEDS];
 
 #define BRIGHTNESS          96
@@ -40,15 +24,14 @@ Rgbw rgbwMode = RgbwDefault();
 Rgbw rgbwMode = RgbwInvalid();  // No RGBW mode, just use RGB.
 #endif
 
-DemoReel100Ptr demoReel = fl::make_shared<DemoReel100>(NUM_LEDS);
+DemoReel100Ptr demoReel = DemoReel100Ptr::New(NUM_LEDS);
 
 void setup() {
-  ScreenMap screenMap = ScreenMap::DefaultStrip(NUM_LEDS);
+  delay(3000); // 3 second delay for recovery
   
   // tell FastLED about the LED strip configuration
-  FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS, 2.0f)
+  FastLED.addLeds<LED_TYPE,DATA_PIN,COLOR_ORDER>(leds, NUM_LEDS)
     .setCorrection(TypicalLEDStrip)
-    .setScreenMap(screenMap)
     .setRgbw(rgbwMode);
 
   // set master brightness control
@@ -67,4 +50,3 @@ void loop()
 }
 
 
-#endif // HAS_ENOUGH_MEMORY

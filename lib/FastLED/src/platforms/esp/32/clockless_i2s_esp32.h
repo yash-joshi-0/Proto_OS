@@ -156,7 +156,7 @@ class ClocklessController : public CPixelLEDController<RGB_ORDER> {
     gpio_num_t mPin;
 
     // -- Verify that the pin is valid
-    static_assert(FastPin<DATA_PIN>::validpin(), "This pin has been marked as an invalid pin, common reasons includes it being a ground pin, read only, or too noisy (e.g. hooked up to the uart).");
+    static_assert(FastPin<DATA_PIN>::validpin(), "Invalid pin specified");
 
     // -- Save the pixel controller
     PixelController<RGB_ORDER> *mPixels;

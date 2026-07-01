@@ -100,13 +100,14 @@ typedef MidiShieldButton DigitalButton;
 
 class CountingButton {
  public:
-  explicit CountingButton(int but_pin) : button_(but_pin), curr_val_(0), mButton("Counting UIButton") {
+  explicit CountingButton(int but_pin) : button_(but_pin), curr_val_(0) {
     debounce_timestamp_ = millis();
     on_ = Read();
   }
   
   void Update(uint32_t time_now) {
     bool clicked = mButton.clicked();
+    FASTLED_DBG("clicked: " << clicked);
     bool val = Read() || mButton.clicked();
     bool changed = val != on_;
 
@@ -140,7 +141,7 @@ class CountingButton {
   bool on_;
   int curr_val_;
   unsigned long debounce_timestamp_;
-  UIButton mButton;
+  UIButton mButton = UIButton("Counting UIButton");
 };
 
 class ColorSelector {

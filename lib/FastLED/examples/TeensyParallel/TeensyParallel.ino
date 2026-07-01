@@ -3,7 +3,8 @@
 // teensy40/41.
 
 #if !defined(__IMXRT1062__) // Teensy 4.0/4.1 only.
-#include "platforms/sketch_fake.hpp"
+void setup() {}
+void loop() {}
 #else
 
 #define FASTLED_USES_OBJECTFLED

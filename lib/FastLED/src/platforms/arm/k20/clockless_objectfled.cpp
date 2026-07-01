@@ -1,3 +1,4 @@
+
 #if defined(__IMXRT1062__) // Teensy 4.0/4.1 only.
 
 
@@ -34,7 +35,7 @@ class ObjectFLEDGroup {
   public:
 
 
-    fl::unique_ptr<fl::ObjectFLED> mObjectFLED;
+    fl::scoped_ptr<fl::ObjectFLED> mObjectFLED;
     fl::RectangularDrawBuffer mRectDrawBuffer;
     bool mDrawn = false;
 
@@ -78,9 +79,7 @@ class ObjectFLEDGroup {
                 pinList.push_back(it->mPin);
             }
             int totalLeds = mRectDrawBuffer.getTotalBytes() / 3;  // Always work in RGB, even when in RGBW mode.
-            #ifdef FASTLED_DEBUG_OBJECTFLED
             FASTLED_WARN("ObjectFLEDGroup::showPixelsOnceThisFrame: totalLeds = " <<  totalLeds);
-            #endif
             mObjectFLED.reset(new fl::ObjectFLED(totalLeds, mRectDrawBuffer.mAllLedsBufferUint8.get(),
                                                  CORDER_RGB, pinList.size(),
                                                  pinList.data()));
@@ -118,7 +117,7 @@ void ObjectFled::showPixels(uint8_t data_pin, PixelIterator& pixel_iterator) {
     group.onQueuingDone();
     const Rgbw rgbw = pixel_iterator.get_rgbw();
 
-            fl::span<uint8_t> strip_pixels = group.mRectDrawBuffer.getLedsBufferBytesForPin(data_pin, true);
+    fl::Slice<uint8_t> strip_pixels = group.mRectDrawBuffer.getLedsBufferBytesForPin(data_pin, true);
     if (rgbw.active()) {
         uint8_t r, g, b, w;
         while (pixel_iterator.has(1)) {

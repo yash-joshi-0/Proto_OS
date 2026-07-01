@@ -27,9 +27,9 @@ namespace {
 
 TEST_CASE("test frame custom allocator") {
     // Set our custom allocator
-    SetPSRamAllocator(custom_malloc, custom_free);
+    SetLargeBlockAllocator(custom_malloc, custom_free);
     
-    FramePtr frame = fl::make_shared<Frame>(100);  // 100 pixels.
+    FramePtr frame = FramePtr::New(100);  // 100 pixels.
     CHECK(allocation_count == 1);  // One for RGB.
     frame.reset();
 
@@ -37,16 +37,3 @@ TEST_CASE("test frame custom allocator") {
     CHECK(allocation_count == 0);
 }
 
-
-TEST_CASE("test blend by black") {
-    SetPSRamAllocator(custom_malloc, custom_free);
-    FramePtr frame = fl::make_shared<Frame>(1);  // 1 pixels.
-    frame->rgb()[0] = CRGB(255, 0, 0);  // Red
-    CRGB out;
-    frame->draw(&out, DRAW_MODE_BLEND_BY_MAX_BRIGHTNESS);
-    CHECK(out == CRGB(255, 0, 0));  // full red because max luma is 255
-    out = CRGB(0, 0, 0);
-    frame->rgb()[0] = CRGB(128, 0, 0);  // Red
-    frame->draw(&out, DRAW_MODE_BLEND_BY_MAX_BRIGHTNESS);
-    CHECK(out == CRGB(64, 0, 0));
-}

@@ -1,4 +1,4 @@
-#include "fl/stdint.h"
+#include <stdint.h>
 #include <string.h>
 
 #ifdef USE_FASTLED

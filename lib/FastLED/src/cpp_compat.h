@@ -1,5 +1,3 @@
-#pragma once
-
 /// @file cpp_compat.h
 /// Compatibility functions based on C++ version
 

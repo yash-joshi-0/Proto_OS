@@ -1,9 +1,7 @@
-#pragma once
-
 #ifndef __INC_LIB8TION_RANDOM_H
 #define __INC_LIB8TION_RANDOM_H
 
-#include "fl/stdint.h"
+#include <stdint.h>
 
 #include "lib8tion/lib8static.h"
 

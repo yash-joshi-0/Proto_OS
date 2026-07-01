@@ -1,10 +1,12 @@
 #pragma once
 
 #include "FastLED.h"
-#include "fl/namespace.h"
 #include "fx/fx1d.h"
+#include "fl/namespace.h"
 
 namespace fl {
+
+
 
 /// @file    pride2015.hpp
 /// @brief   Animated, ever-changing rainbows (Pride2015 effect)
@@ -21,7 +23,7 @@ class Pride2015 : public Fx1d {
     Pride2015(uint16_t num_leds) : Fx1d(num_leds) {}
 
     void draw(Fx::DrawContext context) override;
-    fl::string fxName() const override { return "Pride2015"; }
+    fl::Str fxName() const override { return "Pride2015"; }
 
   private:
     uint16_t mPseudotime = 0;
@@ -59,8 +61,8 @@ void Pride2015::draw(Fx::DrawContext ctx) {
         brightnesstheta16 += brightnessthetainc16;
         uint16_t b16 = sin16(brightnesstheta16) + 32768;
 
-        uint16_t bri16 = (fl::u32)((fl::u32)b16 * (fl::u32)b16) / 65536;
-        uint8_t bri8 = (fl::u32)(((fl::u32)bri16) * brightdepth) / 65536;
+        uint16_t bri16 = (uint32_t)((uint32_t)b16 * (uint32_t)b16) / 65536;
+        uint8_t bri8 = (uint32_t)(((uint32_t)bri16) * brightdepth) / 65536;
         bri8 += (255 - brightdepth);
 
         CRGB newcolor = CHSV(hue8, sat8, bri8);
@@ -71,4 +73,4 @@ void Pride2015::draw(Fx::DrawContext ctx) {
     }
 }
 
-} // namespace fl
+}  // namespace fl

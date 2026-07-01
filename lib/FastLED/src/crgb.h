@@ -3,24 +3,18 @@
 
 #pragma once
 
-#include "fl/stdint.h"
-#include "fl/int.h"
+#include <stdint.h>
 
 #include "chsv.h"
 #include "fl/namespace.h"
 #include "color.h"
 #include "lib8tion/types.h"
 #include "fl/force_inline.h"
-#include "fl/type_traits.h"
-#include "hsv2rgb.h"
-#include "fl/ease.h"
-
+#include "fl/template_magic.h"
 
 
 namespace fl {
-class string;
-class XYMap;
-struct HSV16;
+class Str;
 }
 
 FASTLED_NAMESPACE_BEGIN
@@ -38,48 +32,22 @@ FASTLED_NAMESPACE_BEGIN
 
 struct CRGB;
 
+/// @defgroup PixelTypes Pixel Data Types (CRGB/CHSV)
+/// @brief Structs that hold pixel color data
+/// @{
 
-
-/// HSV conversion function selection based on compile-time defines
-/// This allows users to configure which HSV conversion algorithm to use
-/// by setting one of the following defines:
-/// - FASTLED_HSV_CONVERSION_SPECTRUM: Use spectrum conversion
-/// - FASTLED_HSV_CONVERSION_FULL_SPECTRUM: Use full spectrum conversion  
-/// - FASTLED_HSV_CONVERSION_RAINBOW: Use rainbow conversion (explicit)
-/// - Default (no define): Use rainbow conversion (backward compatibility)
-
-
-
-/// Array-based HSV conversion function selection using the same compile-time defines
-/// @param phsv CHSV array to convert to RGB
-/// @param prgb CRGB array to store the result of the conversion (will be modified)
-/// @param numLeds the number of array values to process
-FASTLED_FORCE_INLINE void hsv2rgb_dispatch( const struct CHSV* phsv, struct CRGB * prgb, int numLeds)
-{
-#if defined(FASTLED_HSV_CONVERSION_SPECTRUM)
-    hsv2rgb_spectrum(phsv, prgb, numLeds);
-#elif defined(FASTLED_HSV_CONVERSION_FULL_SPECTRUM)
-    hsv2rgb_fullspectrum(phsv, prgb, numLeds);
-#elif defined(FASTLED_HSV_CONVERSION_RAINBOW)
-    hsv2rgb_rainbow(phsv, prgb, numLeds);
-#else
-    // Default to rainbow for backward compatibility
-    hsv2rgb_rainbow(phsv, prgb, numLeds);
-#endif
-}
-
-FASTLED_FORCE_INLINE void hsv2rgb_dispatch( const struct CHSV& hsv, struct CRGB& rgb)
-{
-#if defined(FASTLED_HSV_CONVERSION_SPECTRUM)
-    hsv2rgb_spectrum(hsv, rgb);
-#elif defined(FASTLED_HSV_CONVERSION_FULL_SPECTRUM)
-    hsv2rgb_fullspectrum(hsv, rgb);
-#elif defined(FASTLED_HSV_CONVERSION_RAINBOW)
-    hsv2rgb_rainbow(hsv, rgb);
-#else
-    hsv2rgb_rainbow(hsv, rgb);
-#endif
-}
+/// Forward declaration of hsv2rgb_rainbow here,
+/// to avoid circular dependencies.
+///
+/// Convert an HSV value to RGB using a visually balanced rainbow. 
+/// This "rainbow" yields better yellow and orange than a straight
+/// mathematical "spectrum".
+///
+/// ![FastLED 'Rainbow' Hue Chart](https://raw.githubusercontent.com/FastLED/FastLED/gh-pages/images/HSV-rainbow-with-desc.jpg)
+///
+/// @param hsv CHSV struct to convert to RGB. Max hue supported is HUE_MAX_RAINBOW
+/// @param rgb CRGB struct to store the result of the conversion (will be modified)
+void hsv2rgb_rainbow( const struct CHSV& hsv, struct CRGB& rgb);
 
 
 /// Representation of an RGB pixel (Red, Green, Blue)
@@ -87,16 +55,16 @@ struct CRGB {
     union {
         struct {
             union {
-                fl::u8 r;    ///< Red channel value
-                fl::u8 red;  ///< @copydoc r
+                uint8_t r;    ///< Red channel value
+                uint8_t red;  ///< @copydoc r
             };
             union {
-                fl::u8 g;      ///< Green channel value
-                fl::u8 green;  ///< @copydoc g
+                uint8_t g;      ///< Green channel value
+                uint8_t green;  ///< @copydoc g
             };
             union {
-                fl::u8 b;     ///< Blue channel value
-                fl::u8 blue;  ///< @copydoc b
+                uint8_t b;     ///< Blue channel value
+                uint8_t blue;  ///< @copydoc b
             };
         };
         /// Access the red, green, and blue data as an array.
@@ -104,40 +72,15 @@ struct CRGB {
         /// * `raw[0]` is the red value
         /// * `raw[1]` is the green value
         /// * `raw[2]` is the blue value
-        fl::u8 raw[3];
+        uint8_t raw[3];
     };
 
     static CRGB blend(const CRGB& p1, const CRGB& p2, fract8 amountOfP2);
-    static CRGB blendAlphaMaxChannel(const CRGB& upper, const CRGB& lower);
 
-    /// Downscale an CRGB matrix (or strip) to the smaller size.
-    static void downscale(const CRGB* src, const fl::XYMap& srcXY, CRGB* dst, const fl::XYMap& dstXY);
-    static void upscale(const CRGB* src, const fl::XYMap& srcXY, CRGB* dst, const fl::XYMap& dstXY);
-
-    // Are you using WS2812 (or other RGB8 LEDS) to display video?
-    // Does it look washed out and under-saturated?
-    //
-    // Have you tried gamma correction but hate how it decimates the color into 8 colors per component?
-    //
-    // This is an alternative to gamma correction that preserves the hue but boosts the saturation.
-    //
-    // decimating the color from 8 bit -> gamma -> 8 bit (leaving only 8 colors for each component).
-    // work well with WS2812 (and other RGB8) led displays.
-    // This function converts to HSV16, boosts the saturation, and converts back to RGB8.
-    // Note that when both boost_saturation and boost_contrast are true the resulting
-    // pixel will be nearly the same as if you had used gamma correction pow = 2.0.
-    CRGB colorBoost(fl::EaseType saturation_function = fl::EASE_NONE, fl::EaseType luminance_function = fl::EASE_NONE) const;
-    static void colorBoost(const CRGB* src, CRGB* dst, size_t count, fl::EaseType saturation_function = fl::EASE_NONE, fl::EaseType luminance_function = fl::EASE_NONE);
-
-    // Want to do advanced color manipulation in HSV and write back to CRGB?
-    // You want to use HSV16, which is much better at preservering the color
-    // space than CHSV.
-    fl::HSV16 toHSV16() const;
-    
     /// Array access operator to index into the CRGB object
     /// @param x the index to retrieve (0-2)
     /// @returns the CRGB::raw value for the given index
-    FASTLED_FORCE_INLINE fl::u8& operator[] (fl::u8 x)
+    FASTLED_FORCE_INLINE uint8_t& operator[] (uint8_t x)
     {
         return raw[x];
     }
@@ -145,44 +88,36 @@ struct CRGB {
     /// Array access operator to index into the CRGB object
     /// @param x the index to retrieve (0-2)
     /// @returns the CRGB::raw value for the given index
-    FASTLED_FORCE_INLINE const fl::u8& operator[] (fl::u8 x) const
+    FASTLED_FORCE_INLINE const uint8_t& operator[] (uint8_t x) const
     {
         return raw[x];
     }
 
-    #if defined(__AVR__)
-    // Saves a surprising amount of memory on AVR devices.
-    CRGB() = default;
-    #else
     /// Default constructor
-    FASTLED_FORCE_INLINE CRGB() {
-        r = 0;
-        g = 0;
-        b = 0;
-    }
-    #endif
+    /// @warning Default values are UNITIALIZED!
+    FASTLED_FORCE_INLINE CRGB() = default;
 
     /// Allow construction from red, green, and blue
     /// @param ir input red value
     /// @param ig input green value
     /// @param ib input blue value
-    constexpr CRGB(fl::u8 ir, fl::u8 ig, fl::u8 ib) noexcept
+    constexpr CRGB(uint8_t ir, uint8_t ig, uint8_t ib) noexcept
         : r(ir), g(ig), b(ib)
     {
     }
 
     /// Allow construction from 32-bit (really 24-bit) bit 0xRRGGBB color code
     /// @param colorcode a packed 24 bit color code
-    constexpr CRGB(fl::u32 colorcode) noexcept
+    constexpr CRGB(uint32_t colorcode) noexcept
     : r((colorcode >> 16) & 0xFF), g((colorcode >> 8) & 0xFF), b((colorcode >> 0) & 0xFF)
     {
     }
 
-    constexpr fl::u32 as_uint32_t() const noexcept {
-        return fl::u32(0xff000000) |
-               (fl::u32{r} << 16) |
-               (fl::u32{g} << 8) |
-               fl::u32{b};
+    constexpr uint32_t as_uint32_t() const noexcept {
+        return uint32_t(0xff000000) |
+               (uint32_t{r} << 16) |
+               (uint32_t{g} << 8) |
+               uint32_t{b};
     }
 
     /// Allow construction from a LEDColorCorrection enum
@@ -205,19 +140,15 @@ struct CRGB {
     /// Allow construction from a CHSV color
     FASTLED_FORCE_INLINE CRGB(const CHSV& rhs)
     {
-        hsv2rgb_dispatch( rhs, *this);
+        hsv2rgb_rainbow( rhs, *this);
     }
-
-    /// Allow construction from a fl::HSV16 color
-    /// Enables automatic conversion from HSV16 to CRGB
-    CRGB(const fl::HSV16& rhs);
 
     /// Allow assignment from one RGB struct to another
     FASTLED_FORCE_INLINE CRGB& operator= (const CRGB& rhs) = default;
 
     /// Allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code
     /// @param colorcode a packed 24 bit color code
-    FASTLED_FORCE_INLINE CRGB& operator= (const fl::u32 colorcode)
+    FASTLED_FORCE_INLINE CRGB& operator= (const uint32_t colorcode)
     {
         r = (colorcode >> 16) & 0xFF;
         g = (colorcode >>  8) & 0xFF;
@@ -229,7 +160,7 @@ struct CRGB {
     /// @param nr new red value
     /// @param ng new green value
     /// @param nb new blue value
-    FASTLED_FORCE_INLINE CRGB& setRGB (fl::u8 nr, fl::u8 ng, fl::u8 nb)
+    FASTLED_FORCE_INLINE CRGB& setRGB (uint8_t nr, uint8_t ng, uint8_t nb)
     {
         r = nr;
         g = ng;
@@ -241,31 +172,31 @@ struct CRGB {
     /// @param hue color hue
     /// @param sat color saturation
     /// @param val color value (brightness)
-    FASTLED_FORCE_INLINE CRGB& setHSV (fl::u8 hue, fl::u8 sat, fl::u8 val)
+    FASTLED_FORCE_INLINE CRGB& setHSV (uint8_t hue, uint8_t sat, uint8_t val)
     {
-        hsv2rgb_dispatch( CHSV(hue, sat, val), *this);
+        hsv2rgb_rainbow( CHSV(hue, sat, val), *this);
         return *this;
     }
 
     /// Allow assignment from just a hue.
     /// Saturation and value (brightness) are set automatically to max.
     /// @param hue color hue
-    FASTLED_FORCE_INLINE CRGB& setHue (fl::u8 hue)
+    FASTLED_FORCE_INLINE CRGB& setHue (uint8_t hue)
     {
-        hsv2rgb_dispatch( CHSV(hue, 255, 255), *this);
+        hsv2rgb_rainbow( CHSV(hue, 255, 255), *this);
         return *this;
     }
 
     /// Allow assignment from HSV color
     FASTLED_FORCE_INLINE CRGB& operator= (const CHSV& rhs)
     {
-        hsv2rgb_dispatch( rhs, *this);
+        hsv2rgb_rainbow( rhs, *this);
         return *this;
     }
 
     /// Allow assignment from 32-bit (really 24-bit) 0xRRGGBB color code
     /// @param colorcode a packed 24 bit color code
-    FASTLED_FORCE_INLINE CRGB& setColorCode (fl::u32 colorcode)
+    FASTLED_FORCE_INLINE CRGB& setColorCode (uint32_t colorcode)
     {
         r = (colorcode >> 16) & 0xFF;
         g = (colorcode >>  8) & 0xFF;
@@ -275,13 +206,13 @@ struct CRGB {
 
 
     /// Add one CRGB to another, saturating at 0xFF for each channel
-    CRGB& operator+= (const CRGB& rhs);
+    FASTLED_FORCE_INLINE CRGB& operator+= (const CRGB& rhs);
 
     /// Add a constant to each channel, saturating at 0xFF.
     /// @note This is NOT an operator+= overload because the compiler
     /// can't usefully decide when it's being passed a 32-bit
     /// constant (e.g. CRGB::Red) and an 8-bit one (CRGB::Blue)
-    FASTLED_FORCE_INLINE CRGB& addToRGB (fl::u8 d);
+    FASTLED_FORCE_INLINE CRGB& addToRGB (uint8_t d);
 
     /// Subtract one CRGB from another, saturating at 0x00 for each channel
     FASTLED_FORCE_INLINE CRGB& operator-= (const CRGB& rhs);
@@ -290,7 +221,7 @@ struct CRGB {
     /// @note This is NOT an operator+= overload because the compiler
     /// can't usefully decide when it's being passed a 32-bit
     /// constant (e.g. CRGB::Red) and an 8-bit one (CRGB::Blue)
-    FASTLED_FORCE_INLINE CRGB& subtractFromRGB(fl::u8 d);
+    FASTLED_FORCE_INLINE CRGB& subtractFromRGB(uint8_t d);
 
     /// Subtract a constant of '1' from each channel, saturating at 0x00
     FASTLED_FORCE_INLINE CRGB& operator-- ();
@@ -305,7 +236,7 @@ struct CRGB {
     FASTLED_FORCE_INLINE CRGB operator++ (int );
 
     /// Divide each of the channels by a constant
-    FASTLED_FORCE_INLINE CRGB& operator/= (fl::u8 d )
+    FASTLED_FORCE_INLINE CRGB& operator/= (uint8_t d )
     {
         r /= d;
         g /= d;
@@ -314,7 +245,7 @@ struct CRGB {
     }
 
     /// Right shift each of the channels by a constant
-    FASTLED_FORCE_INLINE CRGB& operator>>= (fl::u8 d)
+    FASTLED_FORCE_INLINE CRGB& operator>>= (uint8_t d)
     {
         r >>= d;
         g >>= d;
@@ -324,7 +255,7 @@ struct CRGB {
 
     /// Multiply each of the channels by a constant,
     /// saturating each channel at 0xFF.
-    FASTLED_FORCE_INLINE CRGB& operator*= (fl::u8 d);
+    FASTLED_FORCE_INLINE CRGB& operator*= (uint8_t d);
 
     /// Scale down a RGB to N/256ths of it's current brightness using
     /// "video" dimming rules. "Video" dimming rules means that unless the scale factor
@@ -332,21 +263,21 @@ struct CRGB {
     /// nonzero, it'll stay nonzero, even if that means the hue shifts a little
     /// at low brightness levels.
     /// @see nscale8x3_video
-    FASTLED_FORCE_INLINE CRGB& nscale8_video (fl::u8 scaledown);
+    FASTLED_FORCE_INLINE CRGB& nscale8_video (uint8_t scaledown);
 
     /// %= is a synonym for nscale8_video().  Think of it is scaling down
     /// by "a percentage"
-    FASTLED_FORCE_INLINE CRGB& operator%= (fl::u8 scaledown);
+    FASTLED_FORCE_INLINE CRGB& operator%= (uint8_t scaledown);
 
     /// fadeLightBy is a synonym for nscale8_video(), as a fade instead of a scale
     /// @param fadefactor the amount to fade, sent to nscale8_video() as (255 - fadefactor)
-    FASTLED_FORCE_INLINE CRGB& fadeLightBy (fl::u8 fadefactor );
+    FASTLED_FORCE_INLINE CRGB& fadeLightBy (uint8_t fadefactor );
 
     /// Scale down a RGB to N/256ths of its current brightness, using
     /// "plain math" dimming rules. "Plain math" dimming rules means that the low light
     /// levels may dim all the way to 100% black.
     /// @see nscale8x3
-    CRGB& nscale8 (fl::u8 scaledown );
+    CRGB& nscale8 (uint8_t scaledown );
 
     /// Scale down a RGB to N/256ths of its current brightness, using
     /// "plain math" dimming rules. "Plain math" dimming rules means that the low light
@@ -358,14 +289,14 @@ struct CRGB {
 
 
     /// Return a CRGB object that is a scaled down version of this object
-    FASTLED_FORCE_INLINE CRGB scale8 (fl::u8 scaledown ) const;
+    FASTLED_FORCE_INLINE CRGB scale8 (uint8_t scaledown ) const;
 
     /// Return a CRGB object that is a scaled down version of this object
     FASTLED_FORCE_INLINE CRGB scale8 (const CRGB & scaledown ) const;
 
     /// fadeToBlackBy is a synonym for nscale8(), as a fade instead of a scale
     /// @param fadefactor the amount to fade, sent to nscale8() as (255 - fadefactor)
-    CRGB& fadeToBlackBy (fl::u8 fadefactor );
+    FASTLED_FORCE_INLINE CRGB& fadeToBlackBy (uint8_t fadefactor );
 
     /// "or" operator brings each channel up to the higher of the two values
     FASTLED_FORCE_INLINE CRGB& operator|= (const CRGB& rhs )
@@ -377,7 +308,7 @@ struct CRGB {
     }
 
     /// @copydoc operator|=
-    FASTLED_FORCE_INLINE CRGB& operator|= (fl::u8 d )
+    FASTLED_FORCE_INLINE CRGB& operator|= (uint8_t d )
     {
         if( d > r) r = d;
         if( d > g) g = d;
@@ -395,7 +326,7 @@ struct CRGB {
     }
 
     /// @copydoc operator&=
-    FASTLED_FORCE_INLINE CRGB& operator&= (fl::u8 d )
+    FASTLED_FORCE_INLINE CRGB& operator&= (uint8_t d )
     {
         if( d < r) r = d;
         if( d < g) g = d;
@@ -410,12 +341,12 @@ struct CRGB {
     }
 
     /// Converts a CRGB to a 32-bit color having an alpha of 255.
-    constexpr explicit operator fl::u32() const
+    constexpr explicit operator uint32_t() const
     {
-        return fl::u32(0xff000000) |
-               (fl::u32{r} << 16) |
-               (fl::u32{g} << 8) |
-               fl::u32{b};
+        return uint32_t(0xff000000) |
+               (uint32_t{r} << 16) |
+               (uint32_t{g} << 8) |
+               uint32_t{b};
     }
 
     /// Invert each channel
@@ -436,30 +367,28 @@ struct CRGB {
     }
 #endif
 
-    fl::string toString() const;
+    fl::Str toString() const;
 
     /// Get the "luma" of a CRGB object. In other words, roughly how much
     /// light the CRGB pixel is putting out (from 0 to 255).
-    fl::u8 getLuma() const;
-
-
+    FASTLED_FORCE_INLINE uint8_t getLuma() const;
 
     /// Get the average of the R, G, and B values
-    FASTLED_FORCE_INLINE fl::u8 getAverageLight() const;
+    FASTLED_FORCE_INLINE uint8_t getAverageLight() const;
 
     /// Maximize the brightness of this CRGB object.
     /// This makes the individual color channels as bright as possible
     /// while keeping the same value differences between channels.
     /// @note This does not keep the same ratios between channels,
     /// just the same difference in absolute values.
-    FASTLED_FORCE_INLINE void maximizeBrightness( fl::u8 limit = 255 )  {
-        fl::u8 max = red;
+    FASTLED_FORCE_INLINE void maximizeBrightness( uint8_t limit = 255 )  {
+        uint8_t max = red;
         if( green > max) max = green;
         if( blue > max) max = blue;
 
         // stop div/0 when color is black
         if(max > 0) {
-            fl::u16 factor = ((fl::u16)(limit) * 256) / max;
+            uint16_t factor = ((uint16_t)(limit) * 256) / max;
             red =   (red   * factor) / 256;
             green = (green * factor) / 256;
             blue =  (blue  * factor) / 256;
@@ -471,17 +400,17 @@ struct CRGB {
     /// @param colorCorrection color correction to apply
     /// @param colorTemperature color temperature to apply
     /// @returns a CRGB object representing the adjustment, including color correction and color temperature
-    static CRGB computeAdjustment(fl::u8 scale, const CRGB & colorCorrection, const CRGB & colorTemperature);
+    static CRGB computeAdjustment(uint8_t scale, const CRGB & colorCorrection, const CRGB & colorTemperature);
 
     /// Return a new CRGB object after performing a linear interpolation between this object and the passed in object
-    CRGB lerp8( const CRGB& other, fract8 amountOf2) const;
+    FASTLED_FORCE_INLINE CRGB lerp8( const CRGB& other, fract8 frac) const;
 
     /// @copydoc lerp8
     FASTLED_FORCE_INLINE CRGB lerp16( const CRGB& other, fract16 frac) const;
     /// Returns 0 or 1, depending on the lowest bit of the sum of the color components.
-    FASTLED_FORCE_INLINE fl::u8 getParity()
+    FASTLED_FORCE_INLINE uint8_t getParity()
     {
-        fl::u8 sum = r + g + b;
+        uint8_t sum = r + g + b;
         return (sum & 0x01);
     }
 
@@ -507,9 +436,9 @@ struct CRGB {
     /// the parity twice should generally result in the
     /// original color again.
     ///
-    FASTLED_FORCE_INLINE void setParity( fl::u8 parity)
+    FASTLED_FORCE_INLINE void setParity( uint8_t parity)
     {
-        fl::u8 curparity = getParity();
+        uint8_t curparity = getParity();
 
         if( parity == curparity) return;
 
@@ -712,76 +641,7 @@ struct CRGB {
         FairyLight=0xFFE42D,           ///< @htmlcolorblock{FFE42D}
 
         // If you are using no color correction, use this
-        FairyLightNCC=0xFF9D2A,         ///< @htmlcolorblock{FFE42D}
-
-        // TCL Color Extensions - Essential additions for LED programming
-        // These colors provide useful grayscale levels and color variants
-        
-        // Essential grayscale levels (0-100 scale for precise dimming)
-        Gray0=0x000000,                ///< TCL grayscale 0% @htmlcolorblock{000000}
-        Gray10=0x1A1A1A,               ///< TCL grayscale 10% @htmlcolorblock{1A1A1A}
-        Gray25=0x404040,               ///< TCL grayscale 25% @htmlcolorblock{404040}
-        Gray50=0x7F7F7F,               ///< TCL grayscale 50% @htmlcolorblock{7F7F7F}
-        Gray75=0xBFBFBF,               ///< TCL grayscale 75% @htmlcolorblock{BFBFBF}
-        Gray100=0xFFFFFF,              ///< TCL grayscale 100% @htmlcolorblock{FFFFFF}
-        
-        // Alternative grey spellings
-        Grey0=0x000000,                ///< TCL grayscale 0% @htmlcolorblock{000000}
-        Grey10=0x1A1A1A,               ///< TCL grayscale 10% @htmlcolorblock{1A1A1A}
-        Grey25=0x404040,               ///< TCL grayscale 25% @htmlcolorblock{404040}
-        Grey50=0x7F7F7F,               ///< TCL grayscale 50% @htmlcolorblock{7F7F7F}
-        Grey75=0xBFBFBF,               ///< TCL grayscale 75% @htmlcolorblock{BFBFBF}
-        Grey100=0xFFFFFF,              ///< TCL grayscale 100% @htmlcolorblock{FFFFFF}
-        
-        // Primary color variants (1-4 intensity levels)
-        Red1=0xFF0000,                 ///< TCL red variant 1 (brightest) @htmlcolorblock{FF0000}
-        Red2=0xEE0000,                 ///< TCL red variant 2 @htmlcolorblock{EE0000}
-        Red3=0xCD0000,                 ///< TCL red variant 3 @htmlcolorblock{CD0000}
-        Red4=0x8B0000,                 ///< TCL red variant 4 (darkest) @htmlcolorblock{8B0000}
-        
-        Green1=0x00FF00,               ///< TCL green variant 1 (brightest) @htmlcolorblock{00FF00}
-        Green2=0x00EE00,               ///< TCL green variant 2 @htmlcolorblock{00EE00}
-        Green3=0x00CD00,               ///< TCL green variant 3 @htmlcolorblock{00CD00}
-        Green4=0x008B00,               ///< TCL green variant 4 (darkest) @htmlcolorblock{008B00}
-        
-        Blue1=0x0000FF,                ///< TCL blue variant 1 (brightest) @htmlcolorblock{0000FF}
-        Blue2=0x0000EE,                ///< TCL blue variant 2 @htmlcolorblock{0000EE}
-        Blue3=0x0000CD,                ///< TCL blue variant 3 @htmlcolorblock{0000CD}
-        Blue4=0x00008B,                ///< TCL blue variant 4 (darkest) @htmlcolorblock{00008B}
-        
-        // Useful warm color variants for LED ambience
-        Orange1=0xFFA500,              ///< TCL orange variant 1 @htmlcolorblock{FFA500}
-        Orange2=0xEE9A00,              ///< TCL orange variant 2 @htmlcolorblock{EE9A00}
-        Orange3=0xCD8500,              ///< TCL orange variant 3 @htmlcolorblock{CD8500}
-        Orange4=0x8B5A00,              ///< TCL orange variant 4 @htmlcolorblock{8B5A00}
-        
-        Yellow1=0xFFFF00,              ///< TCL yellow variant 1 @htmlcolorblock{FFFF00}
-        Yellow2=0xEEEE00,              ///< TCL yellow variant 2 @htmlcolorblock{EEEE00}
-        Yellow3=0xCDCD00,              ///< TCL yellow variant 3 @htmlcolorblock{CDCD00}
-        Yellow4=0x8B8B00,              ///< TCL yellow variant 4 @htmlcolorblock{8B8B00}
-        
-        // Popular LED colors for effects
-        Cyan1=0x00FFFF,                ///< TCL cyan variant 1 @htmlcolorblock{00FFFF}
-        Cyan2=0x00EEEE,                ///< TCL cyan variant 2 @htmlcolorblock{00EEEE}
-        Cyan3=0x00CDCD,                ///< TCL cyan variant 3 @htmlcolorblock{00CDCD}
-        Cyan4=0x008B8B,                ///< TCL cyan variant 4 @htmlcolorblock{008B8B}
-        
-        Magenta1=0xFF00FF,             ///< TCL magenta variant 1 @htmlcolorblock{FF00FF}
-        Magenta2=0xEE00EE,             ///< TCL magenta variant 2 @htmlcolorblock{EE00EE}
-        Magenta3=0xCD00CD,             ///< TCL magenta variant 3 @htmlcolorblock{CD00CD}
-        Magenta4=0x8B008B,             ///< TCL magenta variant 4 @htmlcolorblock{8B008B}
-        
-        // Additional useful colors for LED programming
-        VioletRed=0xD02090,            ///< TCL violet red @htmlcolorblock{D02090}
-        DeepPink1=0xFF1493,            ///< TCL deep pink variant 1 @htmlcolorblock{FF1493}
-        DeepPink2=0xEE1289,            ///< TCL deep pink variant 2 @htmlcolorblock{EE1289}
-        DeepPink3=0xCD1076,            ///< TCL deep pink variant 3 @htmlcolorblock{CD1076}
-        DeepPink4=0x8B0A50,            ///< TCL deep pink variant 4 @htmlcolorblock{8B0A50}
-        
-        Gold1=0xFFD700,                ///< TCL gold variant 1 @htmlcolorblock{FFD700}
-        Gold2=0xEEC900,                ///< TCL gold variant 2 @htmlcolorblock{EEC900}
-        Gold3=0xCDAD00,                ///< TCL gold variant 3 @htmlcolorblock{CDAD00}
-        Gold4=0x8B7500                 ///< TCL gold variant 4 @htmlcolorblock{8B7500}
+        FairyLightNCC=0xFF9D2A         ///< @htmlcolorblock{FFE42D}
 
     } HTMLColorCode;
 };
@@ -814,7 +674,7 @@ FASTLED_FORCE_INLINE bool operator!= (const CHSV& lhs, const CHSV& rhs)
 /// Check if the sum of the color channels in one CRGB object is less than another
 FASTLED_FORCE_INLINE bool operator< (const CRGB& lhs, const CRGB& rhs)
 {
-    fl::u16 sl, sr;
+    uint16_t sl, sr;
     sl = lhs.r + lhs.g + lhs.b;
     sr = rhs.r + rhs.g + rhs.b;
     return sl < sr;
@@ -823,7 +683,7 @@ FASTLED_FORCE_INLINE bool operator< (const CRGB& lhs, const CRGB& rhs)
 /// Check if the sum of the color channels in one CRGB object is greater than another
 FASTLED_FORCE_INLINE bool operator> (const CRGB& lhs, const CRGB& rhs)
 {
-    fl::u16 sl, sr;
+    uint16_t sl, sr;
     sl = lhs.r + lhs.g + lhs.b;
     sr = rhs.r + rhs.g + rhs.b;
     return sl > sr;
@@ -832,7 +692,7 @@ FASTLED_FORCE_INLINE bool operator> (const CRGB& lhs, const CRGB& rhs)
 /// Check if the sum of the color channels in one CRGB object is greater than or equal to another
 FASTLED_FORCE_INLINE bool operator>= (const CRGB& lhs, const CRGB& rhs)
 {
-    fl::u16 sl, sr;
+    uint16_t sl, sr;
     sl = lhs.r + lhs.g + lhs.b;
     sr = rhs.r + rhs.g + rhs.b;
     return sl >= sr;
@@ -841,7 +701,7 @@ FASTLED_FORCE_INLINE bool operator>= (const CRGB& lhs, const CRGB& rhs)
 /// Check if the sum of the color channels in one CRGB object is less than or equal to another
 FASTLED_FORCE_INLINE bool operator<= (const CRGB& lhs, const CRGB& rhs)
 {
-    fl::u16 sl, sr;
+    uint16_t sl, sr;
     sl = lhs.r + lhs.g + lhs.b;
     sr = rhs.r + rhs.g + rhs.b;
     return sl <= sr;
@@ -850,7 +710,7 @@ FASTLED_FORCE_INLINE bool operator<= (const CRGB& lhs, const CRGB& rhs)
 
 
 /// @copydoc CRGB::operator/=
-FASTLED_FORCE_INLINE CRGB operator/( const CRGB& p1, fl::u8 d)
+FASTLED_FORCE_INLINE CRGB operator/( const CRGB& p1, uint8_t d)
 {
     return CRGB( p1.r/d, p1.g/d, p1.b/d);
 }
@@ -879,12 +739,14 @@ FASTLED_FORCE_INLINE CRGB operator+( const CRGB& p1, const CRGB& p2);
 FASTLED_FORCE_INLINE CRGB operator-( const CRGB& p1, const CRGB& p2);
 
 /// @copydoc CRGB::operator*=
-FASTLED_FORCE_INLINE CRGB operator*( const CRGB& p1, fl::u8 d);
+FASTLED_FORCE_INLINE CRGB operator*( const CRGB& p1, uint8_t d);
 
 /// Scale using CRGB::nscale8_video()
-FASTLED_FORCE_INLINE CRGB operator%( const CRGB& p1, fl::u8 d);
+FASTLED_FORCE_INLINE CRGB operator%( const CRGB& p1, uint8_t d);
 
 /// @} PixelTypes
 
 
 FASTLED_NAMESPACE_END
+
+

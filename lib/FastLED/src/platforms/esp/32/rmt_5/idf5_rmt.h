@@ -5,15 +5,13 @@
 #if FASTLED_RMT5
 
 #include "pixel_iterator.h"
-#include "fl/stdint.h"
+#include <stdint.h>
 #include "fl/namespace.h"
 
-namespace fl {
+FASTLED_NAMESPACE_BEGIN
 
 class IRmtStrip;
 
-// NOTE: LED_STRIP_RMT_DEFAULT_MEM_BLOCK_SYMBOLS controls the memory block size.
-// See codebase.
 class RmtController5
 {
 public:
@@ -45,8 +43,9 @@ private:
     DmaMode mDmaMode;
 };
 
-} // namespace fl
+FASTLED_NAMESPACE_END
 
 
 
 #endif  // FASTLED_RMT5
+

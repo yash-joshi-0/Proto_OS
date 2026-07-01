@@ -11,12 +11,10 @@
 // Explicitly include Arduino.h here so any framework-specific defines take
 // priority.
 #ifdef ARDUINO
-#include <Arduino.h> // ok include
+#include <Arduino.h>
 #endif
 
-#ifndef FASTLED_ARM
-#error "FASTLED_ARM must be defined before including this header. Ensure platforms/arm/is_arm.h is included first."
-#endif
+#define FASTLED_ARM
 #define FASTLED_ARM_M0_PLUS
 
 // TODO: PORT SPI TO HW

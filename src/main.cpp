@@ -1,3 +1,4 @@
+#include <Arduino.h>
 #include <MD_MAX72xx.h>
 #include <FastLED.h>
 #include <SPI.h>
@@ -8,14 +9,14 @@
 // quick edit, keep as integers (should be the only thing you need to touch)
 #define TEXTSIZE          1       // oled text size
 #define PANEL_BRIGHTNESS  1
-#define SIDE_BRIGHTNESS   128
+#define SIDE_BRIGHTNESS   64
 #define LED_COLOR         CRGB::Green
 
 
 // config
 #define HARDWARE_TYPE MD_MAX72XX::FC16_HW
 #define MAX_DEVICES   14
-#define NUM_LEDS      60
+#define NUM_LEDS      36
 #define LED_TYPE      WS2812
 #define COLOR_ORDER   GRB
 
@@ -28,8 +29,8 @@ int charX[] = {30 * TEXTSIZE, 36 * TEXTSIZE};
 int charY[] = {0 * TEXTSIZE, 8 * TEXTSIZE};
 
 // pins
-#define LED_PIN       4
-#define OLED_CLK      5
+#define LED_PIN       A1
+#define OLED_CLK      4
 #define OLED_MOSI     6
 #define OLED_RST      7
 #define OLED_DC       8
@@ -323,6 +324,12 @@ void updateIdle()
     faceState = BLINK;
     blinkStartTime = millis();
     isBlinking = true;
+
+    for (int i = 0; i < NUM_LEDS; i++)
+    {
+      leds[i] = LED_COLOR;
+    }
+    FastLED.show();
   }
 }
 
@@ -441,6 +448,11 @@ void setup()
   FastLED.addLeds<LED_TYPE, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS);
   FastLED.setBrightness(SIDE_BRIGHTNESS);
 
+  for (int i = 0; i < NUM_LEDS; i++) {
+    leds[i] = LED_COLOR;
+  }
+  FastLED.show();
+
   pinMode(BUTTON_PIN, INPUT_PULLUP);
 
   buttonIdleState = digitalRead(BUTTON_PIN);
@@ -456,13 +468,6 @@ void setup()
 
   display.begin(0, true);
   initScreen();
-
-  for (int i = 0; i < NUM_LEDS; i++)
-  {
-    leds[i] = CRGB::Black;
-    leds[i] = LED_COLOR;
-  }
-  FastLED.show();
 
   nextBlinkTime = millis() + random(5000, 10000);
 }

@@ -64,6 +64,14 @@ public:
 
 #define _FL_DEFPIN(PIN, bspPin, PORT) template<> class FastPin<PIN> : public _ARMPIN<PIN, bspPin, PORT> {};
 
+#ifdef ARDUINO_NANO_R4
+#pragma message "NANO_R4 DEFINED"
+#endif
+
+#ifdef ARDUINO_UNOR4_WIFI
+#pragma message "UNOR4 WIFI DEFINED"
+#endif
+
 // Actual pin definitions
 #if defined(ARDUINO_UNOR4_WIFI)
 

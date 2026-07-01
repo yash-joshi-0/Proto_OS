@@ -1,15 +1,15 @@
 #pragma once
 
-#include "fl/stdint.h"
+#include <stdint.h>
 
 #include "fl/force_inline.h"
 #include "fl/lut.h"
-#include "fl/memory.h"
+#include "fl/ptr.h"
+
 
 #include "fl/map.h"
-#include "fl/namespace.h"
 #include "fl/str.h"
-#include "fl/json.h"
+#include "fl/namespace.h"
 
 /* Screenmap maps strip indexes to x,y coordinates. This is used for FastLED Web
  * to map the 1D strip to a 2D screen. Note that the strip can have arbitrary
@@ -17,16 +17,10 @@
  * FastLED for the browser.
  */
 
- // CONVERT JSON TO JSON2
- // DON'T USE JSON
-
 namespace fl {
 
-class string;
-class Json;
-
-// Forward declaration for internal helper function
-fl::vector<float> jsonArrayToFloatVector(const fl::Json& jsonArray);
+class Str;
+class JsonDocument;
 
 // ScreenMap screen map maps strip indexes to x,y coordinates for a ui
 // canvas in float format.
@@ -34,38 +28,27 @@ fl::vector<float> jsonArrayToFloatVector(const fl::Json& jsonArray);
 class ScreenMap {
   public:
     static ScreenMap Circle(int numLeds, float cm_between_leds = 1.5f,
-                            float cm_led_diameter = 0.5f,
-                            float completion = 1.0f);
-
-    static ScreenMap DefaultStrip(int numLeds, float cm_between_leds = 1.5f,
-                                  float cm_led_diameter = 0.2f,
-                                  float completion = .9f) {
-        return Circle(numLeds, cm_between_leds, cm_led_diameter, completion);
-    }
+                            float cm_led_diameter = 0.5f);
 
     ScreenMap() = default;
 
     // is_reverse is false by default for linear layout
-    ScreenMap(u32 length, float mDiameter = -1.0f);
+    ScreenMap(uint32_t length, float mDiameter = -1.0f);
 
-    ScreenMap(const vec2f *lut, u32 length, float diameter = -1.0);
+    ScreenMap(const pair_xy_float *lut, uint32_t length,
+              float diameter = -1.0);
 
-    template <u32 N>
-    ScreenMap(const vec2f (&lut)[N], float diameter = -1.0)
+    template <uint32_t N>
+    ScreenMap(const pair_xy_float (&lut)[N], float diameter = -1.0)
         : ScreenMap(lut, N, diameter) {}
 
     ScreenMap(const ScreenMap &other);
-    ScreenMap(ScreenMap&& other);
 
-    const vec2f &operator[](u32 x) const;
+    const pair_xy_float &operator[](uint32_t x) const;
 
-    void set(u16 index, const vec2f &p);
+    void set(uint16_t index, const pair_xy_float &p);
 
-    void addOffset(const vec2f &p);
-    void addOffsetX(float x);
-    void addOffsetY(float y);
-
-    vec2f &operator[](u32 x);
+    pair_xy_float &operator[](uint32_t x);
 
     // TODO: change this name to setDiameterLed. Default should be .5f
     // for 5 mm ws lense.
@@ -73,32 +56,29 @@ class ScreenMap {
 
     // define the assignment operator
     ScreenMap &operator=(const ScreenMap &other);
-    ScreenMap &operator=(ScreenMap &&other);
 
-    vec2f mapToIndex(u32 x) const;
+    pair_xy_float mapToIndex(uint32_t x) const;
 
-    u32 getLength() const;
+    uint32_t getLength() const;
     // The diameter each point represents.
     float getDiameter() const;
 
-    // Get the bounding box of all points in the screen map
-    vec2f getBounds() const;
-
     static bool ParseJson(const char *jsonStrScreenMap,
-                          fl::fl_map<string, ScreenMap> *segmentMaps,
-                          string *err = nullptr);
+                          FixedMap<Str, ScreenMap, 16> *segmentMaps,
+                          Str *err = nullptr);
 
     static bool ParseJson(const char *jsonStrScreenMap,
                           const char *screenMapName, ScreenMap *screenmap,
-                          string *err = nullptr);
+                          Str *err = nullptr);
 
-    static void toJsonStr(const fl::fl_map<string, ScreenMap> &,
-                          string *jsonBuffer);
-    static void toJson(const fl::fl_map<string, ScreenMap> &, fl::Json *doc);
+    static void toJsonStr(const FixedMap<Str, ScreenMap, 16> &,
+                          Str *jsonBuffer);
+    static void toJson(const FixedMap<Str, ScreenMap, 16> &,
+                       JsonDocument *doc);
 
   private:
-    static const vec2f &empty();
-    u32 length = 0;
+    static const pair_xy_float &empty();
+    uint32_t length = 0;
     float mDiameter = -1.0f; // Only serialized if it's not > 0.0f.
     LUTXYFLOATPtr mLookUpTable;
 };

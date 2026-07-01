@@ -1,6 +1,5 @@
 /// @file    Cylon.ino
-/// @brief   An animation that moves a single LED back and forth as the entire strip changes.
-///          (Larson Scanner effect)
+/// @brief   An animation that moves a single LED back and forth (Larson Scanner effect)
 /// @example Cylon.ino
 
 #include <FastLED.h>

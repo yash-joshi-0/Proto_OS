@@ -16,9 +16,6 @@ bool gReverseDirection = false;
 
 CRGB leds[NUM_LEDS];
 
-// Forward declaration
-void Fire2012();
-
 void setup() {
   delay(3000); // sanity delay
   FastLED.addLeds<CHIPSET, LED_PIN, COLOR_ORDER>(leds, NUM_LEDS).setCorrection( TypicalLEDStrip );
@@ -28,7 +25,7 @@ void setup() {
 void loop()
 {
   // Add entropy to random number generator; we use a lot of it.
-  random16_add_entropy( random16());
+  // random16_add_entropy( random());
 
   Fire2012(); // run simulation frame
   
@@ -109,3 +106,4 @@ void Fire2012()
       leds[pixelnumber] = color;
     }
 }
+

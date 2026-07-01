@@ -1,6 +1,6 @@
 #pragma once
 
-#include "fl/stdint.h"
+#include <stdint.h>
 
 #ifndef ESP8266
 #define ESP8266
@@ -36,3 +36,4 @@ typedef uint32_t prog_uint32_t;
 #   define FASTLED_ESP8266_RAW_PIN_ORDER
 # endif
 #endif
+

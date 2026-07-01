@@ -1,5 +1,6 @@
 #pragma once
 
+
 #ifdef FASTLED_NO_FORCE_INLINE
 #define FASTLED_FORCE_INLINE inline
 #else
